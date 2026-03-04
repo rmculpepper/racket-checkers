@@ -3,13 +3,26 @@
          racket/list
          racket/match
          racket/contract/base
-         racket/struct
          syntax/srcloc
          "private/result.rkt"
          "private/test.rkt"
          "private/check.rkt")
 (provide test
-         check)
+         check
+         checker?
+         (contract-out
+          [checker:predicate
+           (-> (-> any/c any/c) checker?)]
+          [checker:values-predicate
+           (-> procedure? checker?)]
+          [checker:error
+           (-> (or/c (-> any/c any/c) regexp?) checker?)]
+          [run-tests
+           (->* [(-> any)]
+                [#:trace (or/c exact-nonnegative-integer? +inf.0 #t)
+                 #:tell-raco? boolean?
+                 #:count-states (listof symbol?)]
+                exact-nonnegative-integer?)]))
 
 ;; This is my bikeshed. There are many like it, but this one is mine.
 
@@ -125,8 +138,34 @@
 ;; Run
 
 (define (run-tests proc
-                   #:tell-raco? [tell-raco? #t])
-  (define listener (make-test-listener #:tell-raco? tell-raco?))
+                   #:trace [level 0]
+                   #:tell-raco? [tell-raco? #t]
+                   #:count-states [count-states '(fail)])
+  (define listener
+    (make-test-listener #:tell-raco? tell-raco?
+                        #:trace (case level [(#t) +inf.0] [else level])))
   (parameterize ((current-test-context null)
                  (current-test-listeners (list listener)))
-    (call-with-continuation-barrier proc)))
+    (call-with-continuation-barrier proc))
+  (define ch (listener null 'get-counters))
+  (let ([start (hash-ref ch 'start)]
+        [pass (hash-ref ch 'pass)]
+        [fail (hash-ref ch 'fail)]
+        [skip (hash-ref ch 'skip)]
+        [xfail (hash-ref ch 'xfail)]
+        [xpass (hash-ref ch 'xpass)]
+        [incomplete (hash-ref ch 'incomplete)])
+    (print-summary start pass fail skip xfail xpass incomplete)
+    (for/sum ([st (in-list count-states)]) (hash-ref ch st 0))))
+
+(define (print-summary start pass fail skip xfail xpass incomplete)
+  (define (ifnz n label) (if (zero? n) "" (format ", ~s ~a" n label)))
+  (write-string
+   (string-append (format "~s test(s) run: ~s pass" start pass)
+                  (ifnz skip "skip")
+                  (ifnz xfail "xfail")
+                  (ifnz xpass "xpass")
+                  (ifnz fail "fail")
+                  (ifnz incomplete "incomplete")
+                  "\n"))
+  (void))

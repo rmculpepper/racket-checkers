@@ -1,6 +1,7 @@
 #lang racket/base
 (require racket/match
          racket/string
+         racket/path
          syntax/srcloc
          raco/testing
          "check.rkt"
@@ -49,8 +50,12 @@
 
 (define (test-frame-short-name fr)
   (or (test-frame-name fr)
-      (let ([loc (test-frame-loc fr)])
-        (and loc (source-location->string loc)))))
+      (loc->short-name (test-frame-loc fr))))
+
+(define (loc->short-name loc)
+  (define src (source-location-source loc))
+  (define src* (if (path? src) (file-name-from-path src) src))
+  (source-location->string (update-source-location loc #:source src*)))
 
 (define (test-context-xfail? ctx)
   (match ctx
@@ -74,64 +79,94 @@
 ;; - CheckFailure
 ;; - SkipTest
 
+;; TestState is one of 'pass, 'fail, 'xfail, 'xpass, 'skip, 'incomplete
+;; where 'xfail means "expected fail", 'xpass means "unexpected pass"
+;; ('xpass seems like wrong abbrev, but also seems standard),
+;; and 'incomplete means no test end reported.
+
 ;; make-test-listener : ... -> TestListener
 (define (make-test-listener #:tell-raco? [tell-raco? #t]
-                            #:print-names [print-levels 0]
-                            #:print-states [print-states '(fail xfail uxpass)])
-  (define (tell-raco s)
-    (when tell-raco? (tell-raco* s)))
+                            #:trace [print-levels 0]
+                            #:print-states [print-states '(fail xfail xpass)])
+  (define cv (make-counter-vector))
+  (define (tell s)
+    (counter-incr! cv s 1)
+    (when tell-raco? (tell-raco s)))
   (define (listener ctx event)
     (match event
+      ;; --------------------
+      ;; Test events
       ['start
+       (tell 'start)
        (define level (max 0 (sub1 (length ctx)))) ;; though ctx should be non-empty
        (when (< level print-levels)
          (printf "~a~a\n"
                  (make-string (* level 2) #\space)
                  (or (test-context-short-name ctx) "?")))]
       ['end
-       (define state (if (test-context-xfail? ctx) 'uxpass 'pass))
-       (tell-raco state)
+       (define state (if (test-context-xfail? ctx) 'xpass 'pass))
+       (tell state)
        (when (memq state print-states)
          (print-pass ctx state))]
       [(? check-failure? cf)
        (define state (if (test-context-xfail? ctx) 'xfail 'fail))
-       (cond [(test-context-xfail? ctx)
-              (tell-raco 'xfail)
-              (when (memq 'xfail print-states)
-                (print-fail ctx cf "FAILURE (EXPECTED)"))]
-             [else
-              (tell-raco 'fail)
-              (when (memq 'fail print-states)
-                (print-fail ctx cf "FAILURE"))])]
+       (tell state)
+       (when (memq state print-states)
+         (print-fail ctx cf state))]
       [(? skip-test? sk)
-       (tell-raco 'skip)
+       (tell 'skip)
        (when (memq 'skip print-states)
          (print-skip ctx sk))]
+      ;; --------------------
+      ;; Query methods (ctx unused)
+      ['get-counters
+       (define h
+         (for/hasheq ([key (in-vector counter-slots)] [n (in-vector cv)])
+           (values key n)))
+       (define incomplete
+         (- (hash-ref h 'start)
+            (for/sum ([(k n) (in-hash h)] #:when (memq k end-states)) n)))
+       (hash-set h 'incomplete incomplete)]
       [_ (void)]))
   listener)
 
-(define (tell-raco* s)
+(define end-states
+  '(pass fail skip xfail xpass))
+(define counter-slots
+  '#(start pass fail skip xfail xpass))
+(define (make-counter-vector)
+  (make-vector (vector-length counter-slots) 0))
+(define (slot-index s)
+  (for/or ([i (in-naturals)] [cs (in-vector counter-slots)] #:when (eq? cs s)) i))
+(define (counter-incr! cv s delta)
+  (define si (slot-index s))
+  (let loop ()
+    (define n (vector-ref cv si))
+    (if (vector-cas! cv si n (+ n delta)) (void) (loop))))
+
+(define (tell-raco s)
   (case s
     [(pass xfail) (test-log! #t)]
-    [(fail uxpass) (test-log! #f)]
+    [(fail xpass) (test-log! #f)]
     [(skip) (void)]))
 
-(define (print-pass ctx uxpass?)
+(define (print-pass ctx state)
   (write-string bar-line)
   (write-string (test-context-full-name-line ctx))
-  (cond [uxpass? (write-string "PASS (UNEXPECTED)\n")]
-        [else (write-string "PASS\n")])
+  (case state
+    [(pass) (write-string "PASS\n")]
+    [(xpass) (write-string "XPASS\n")])
   (write-string bar-line)
   (void))
 
 (define (print-skip ctx sk)
   (write-string bar-line)
   (write-string (test-context-full-name-line ctx))
-  (write-string "SKIPPED\n")
+  (write-string "SKIP\n")
   (write-string bar-line)
   (void))
 
-(define (print-fail ctx cf xfail?)
+(define (print-fail ctx cf state)
   (match-define (check-failure info) cf)
   (define (print-info key label mode #:if [ok? void] #:map [f values])
     (match (assoc key info)
@@ -139,8 +174,9 @@
       [#f (void)]))
   (write-string bar-line)
   (write-string (test-context-full-name-line ctx))
-  (cond [xfail? (write-string "FAILURE (EXPECTED)\n")]
-        [else (write-string "FAILURE\n")])
+  (case state
+    [(fail) (write-string "FAIL\n")]
+    [(xfail) (write-string "XFAIL\n")])
   (print-info '#:location "location" 'display
               #:if source-location? #:map source-location->string)
   (print-info '#:actual "actual" 'value #:map result->print-result)
