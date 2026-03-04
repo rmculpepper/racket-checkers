@@ -119,3 +119,15 @@
     [(_ actual:expr c:checker-clause ...)
      #`(let ([info `((#:location ,#,(stx->loc-expr this-syntax)))])
          (check* info actual c.checker ...))]))
+
+;; ============================================================
+;; Run
+
+(define (run-tests proc
+                   #:tell-raco? [tell-raco? #t])
+  (define listener
+    (make-test-listener #:tell-raco? tell-raco?))
+  (parameterize ((current-info-stack null)
+                 (current-test-context null)
+                 (current-test-listeners (list listener)))
+    (call-with-continuation-barrier proc)))

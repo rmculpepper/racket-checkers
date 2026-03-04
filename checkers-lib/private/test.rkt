@@ -28,19 +28,8 @@
 
 ;; test-notify : TestContext Event -> Void
 (define (test-notify ctx event)
-  (define listeners (current-test-listeners))
-  (define (notify-all event)
-    (for ([listener (in-list listeners)])
-      (listener ctx event)))
-  (notify-all event)
-  (match event
-    ['end
-     (notify-all (if (test-context-xfail? ctx) 'uxpass 'xfail))]
-    [(? check-failure?)
-     (notify-all (if (test-context-xfail? ctx) 'xfail 'fail))]
-    [(? skip-test?)
-     (notify-all 'skip)]
-    [_ (void)]))
+  (for ([listener (in-list (current-test-listeners))])
+    (listener ctx event)))
 
 ;; TestContext = (Listof TestFrame)
 
@@ -84,52 +73,74 @@
 ;; - 'end
 ;; - CheckFailure
 ;; - SkipTest
-;; - SynthEvent
 
-;; SynthEvent is one of
-;; - 'pass      -- passed as expected
-;; - 'fail      -- failed (unexpected)
-;; - 'xfail     -- failed as expected
-;; - 'uxpass    -- passed when expected to fail
-;; - 'skip      -- skipped
-
-;; make-test-listener : TestListener
-(define (make-test-listener #:print-names [print-levels 0]
-                            #:show-xfail? [print-xfail? #t]
-                            #:show-skip? [print-skip? #f])
-  (define level 0)
+;; make-test-listener : ... -> TestListener
+(define (make-test-listener #:tell-raco? [tell-raco? #t]
+                            #:print-names [print-levels 0]
+                            #:print-states [print-states '(fail xfail uxpass)])
+  (define (tell-raco s)
+    (when tell-raco? (tell-raco* s)))
   (define (listener ctx event)
     (match event
       ['start
+       (define level (max 0 (sub1 (length ctx)))) ;; though ctx should be non-empty
        (when (< level print-levels)
          (printf "~a~a\n"
-                 (make-string (* 2 level) #\space)
-                 (or (test-context-short-name ctx) "?")))
-       (set! level (add1 level))]
+                 (make-string (* level 2) #\space)
+                 (or (test-context-short-name ctx) "?")))]
       ['end
-       (when (test-context-xfail? ctx)
-         (print-uxpass ctx))
-       (set! level (sub1 level))]
+       (define state (if (test-context-xfail? ctx) 'uxpass 'pass))
+       (tell-raco state)
+       (when (memq state print-states)
+         (print-pass ctx state))]
       [(? check-failure? cf)
+       (define state (if (test-context-xfail? ctx) 'xfail 'fail))
        (cond [(test-context-xfail? ctx)
-              (when print-xfail?
-                (print-fail ctx cf "EXPECTED FAILURE"))]
-             [else (print-fail ctx cf "FAILURE")])
-       (set! level (sub1 level))]
+              (tell-raco 'xfail)
+              (when (memq 'xfail print-states)
+                (print-fail ctx cf "FAILURE (EXPECTED)"))]
+             [else
+              (tell-raco 'fail)
+              (when (memq 'fail print-states)
+                (print-fail ctx cf "FAILURE"))])]
       [(? skip-test? sk)
-       (when print-skip?
-         (print-skip ctx sk))
-       (set! level (sub1 level))]
+       (tell-raco 'skip)
+       (when (memq 'skip print-states)
+         (print-skip ctx sk))]
       [_ (void)]))
   listener)
 
-(define (print-fail ctx cf what)
+(define (tell-raco* s)
+  (case s
+    [(pass xfail) (test-log! #t)]
+    [(fail uxpass) (test-log! #f)]
+    [(skip) (void)]))
+
+(define (print-pass ctx uxpass?)
+  (write-string bar-line)
+  (write-string (test-context-full-name-line ctx))
+  (cond [uxpass? (write-string "PASS (UNEXPECTED)\n")]
+        [else (write-string "PASS\n")])
+  (write-string bar-line)
+  (void))
+
+(define (print-skip ctx sk)
+  (write-string bar-line)
+  (write-string (test-context-full-name-line ctx))
+  (write-string "SKIPPED\n")
+  (write-string bar-line)
+  (void))
+
+(define (print-fail ctx cf xfail?)
   (match-define (check-failure info-stack info) cf)
   (define (print-info key label mode #:if [ok? void] #:map [f values])
     (match (assoc key info)
       [(list _ v) (printkv label mode (f v))]
       [#f (void)]))
-  (printf "~a~a\n~a\n" bar-separator (test-context-full-name-line ctx) what)
+  (write-string bar-line)
+  (write-string (test-context-full-name-line ctx))
+  (cond [xfail? (write-string "FAILURE (EXPECTED)\n")]
+        [else (write-string "FAILURE\n")])
   (print-info '#:location "location" 'display
               #:if source-location? #:map source-location->string)
   (print-info '#:actual "actual" 'value #:map result->print-result)
@@ -139,16 +150,8 @@
     (printkv (format "~a" (car e)) 'value (cadr e)))
   (print-info '#:failure "failure" 'display #:if string?)
   (print-info '#:subfail "detail" 'display #:if string?)
-  (write-string bar-separator)
+  (write-string bar-line)
   (void))
-
-(define (print-uxpass ctx)
-  (define name-line (test-context-full-name-line ctx))
-  (printf "~a~aUNEXPECTED PASS\n~a" bar-separator name-line bar-separator))
-
-(define (print-skip ctx sk)
-  (define name-line (test-context-full-name-line ctx))
-  (printf "~a~aSKIPPED\n~a" bar-separator name-line bar-separator))
 
 (define (printkv k mode v)
   (define KEYLEN 12)
@@ -160,17 +163,9 @@
     ((value)
      (printf "~a~a~e\n" key pad v))))
 
-(define bar-separator "--------------------")
-
-;; raco-test-listener : TestListener
-(define (raco-test-listener ctx event)
-  (case event
-    [(pass xfail) (test-log! #t)]
-    [(fail uxpass) (test-log! #f)]
-    [else (void)]))
+(define bar-line "--------------------\n")
 
 ;; current-test-listeners : Parameter of (Listof TestListener)
 (define current-test-listeners
   (make-parameter
-   (list (make-test-listener)
-         raco-test-listener)))
+   (list (make-test-listener))))
