@@ -47,7 +47,7 @@
     (if line (string-append line "\n") "")))
 
 (define (test-context-full-name ctx)
-  (match (filter string? (map test-frame-short-name ctx))
+  (match (filter string? (map test-frame-short-name (reverse ctx)))
     ['() #f]
     [names (string-join names " > ")]))
 
