@@ -88,7 +88,7 @@
 (define-syntax test
   (syntax-parser
     [(_ (~optional n:maybe-name) (~optional l:maybe-location) body:expr ...)
-     #`(test* (~? n.name #f) (~? l.location #,(stx->loc-expr this-syntax)) '()
+     #`(test* (~? n.name #f) (~? l.location #,(stx->loc-expr this-syntax))
               (lambda () body ... (void)))]))
 
 ;; ============================================================

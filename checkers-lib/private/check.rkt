@@ -174,9 +174,9 @@
 ;; A check either returns void or raises a `check-failure` instance (not an exn
 ;; subtype). Unlike rackunit, top-level checks do not get wrapped as test cases.
 
-(struct stop-test (info))
-(struct check-failure stop-test ())
-(struct skip-test stop-test ())
+(struct test-signal (info))
+(struct check-failure test-signal ())
+(struct skip-test-signal test-signal ())
 
 (define (make-check-failure info result fault)
   (check-failure (append info `((#:actual ,result)) fault)))

@@ -15,11 +15,11 @@
 ;; bugs in test program. Test does not detect continuation escapes.
 
 ;; test* : String/#f Srcloc/#f (Listof TestOption) (-> Any) -> Void
-(define (test* name loc opts proc)
-  (define frame (test-frame name loc opts))
+(define (test* name loc proc)
+  (define frame (test-frame name loc))
   (define ctx (cons frame (current-test-context)))
   (parameterize ((current-test-context ctx))
-    (with-handlers ([stop-test?
+    (with-handlers ([test-signal?
                      (lambda (st)
                        (test-notify ctx st))])
       (test-notify ctx 'start)
@@ -101,14 +101,14 @@
        (tell 'pass)
        (when (memq 'pass print-states)
          (print-pass ctx))]
-      [(? check-failure? cf)
+      [(check-failure info)
        (tell 'fail)
        (when (memq 'fail print-states)
-         (print-fail ctx cf))]
-      [(? skip-test? sk)
+         (print-fail ctx info))]
+      [(skip-test-signal info)
        (tell 'skip)
        (when (memq 'skip print-states)
-         (print-skip ctx sk))]
+         (print-skip ctx info))]
       ;; --------------------
       ;; Query methods (ctx unused)
       ['get-counters
@@ -149,15 +149,14 @@
   (write-string bar-line)
   (void))
 
-(define (print-skip ctx sk)
+(define (print-skip ctx info)
   (write-string bar-line)
   (write-string (test-context-full-name-line ctx))
   (write-string "SKIP\n")
   (write-string bar-line)
   (void))
 
-(define (print-fail ctx cf state)
-  (match-define (check-failure info) cf)
+(define (print-fail ctx info)
   (define (print-info key label mode #:if [ok? void] #:map [f values])
     (match (assoc key info)
       [(list _ v) (printkv label mode (f v))]
