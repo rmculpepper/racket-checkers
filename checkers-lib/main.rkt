@@ -114,6 +114,7 @@
              #:with checker #'(checker:error predicate/regexp))
     ))
 
+;; Note: evaluation is left-to-right
 (define-syntax check
   (syntax-parser
     [(_ actual:expr c:checker-clause ...)
@@ -125,9 +126,7 @@
 
 (define (run-tests proc
                    #:tell-raco? [tell-raco? #t])
-  (define listener
-    (make-test-listener #:tell-raco? tell-raco?))
-  (parameterize ((current-info-stack null)
-                 (current-test-context null)
+  (define listener (make-test-listener #:tell-raco? tell-raco?))
+  (parameterize ((current-test-context null)
                  (current-test-listeners (list listener)))
     (call-with-continuation-barrier proc)))

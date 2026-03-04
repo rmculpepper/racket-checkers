@@ -132,7 +132,7 @@
   (void))
 
 (define (print-fail ctx cf xfail?)
-  (match-define (check-failure info-stack info) cf)
+  (match-define (check-failure info) cf)
   (define (print-info key label mode #:if [ok? void] #:map [f values])
     (match (assoc key info)
       [(list _ v) (printkv label mode (f v))]

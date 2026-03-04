@@ -174,20 +174,18 @@
 ;; A check either returns void or raises a `check-failure` instance (not an exn
 ;; subtype). Unlike rackunit, top-level checks do not get wrapped as test cases.
 
-(define current-info-stack (make-parameter null))
-
-(struct stop-test (info-stack info))
+(struct stop-test (info))
 (struct check-failure stop-test ())
 (struct skip-test stop-test ())
 
-(define (make-check-failure info-stack info result fault)
-  (check-failure info-stack (append info `((#:actual ,result)) fault)))
+(define (make-check-failure info result fault)
+  (check-failure (append info `((#:actual ,result)) fault)))
 
 ;; Note: evaluation is left-to-right (except info)
 (define-syntax-rule (check* info expr checker ...)
   (let ([r (catch-result expr)])
     (let ([fault (apply-checkers (list checker ...) r)])
-      (when fault (raise (make-check-failure (current-info-stack) info r fault)))
+      (when fault (raise (make-check-failure info r fault)))
       (void))))
 
 ;; ----------------------------------------
