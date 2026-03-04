@@ -1,49 +1,46 @@
 #lang racket/base
-(require (for-syntax racket/base syntax/parse syntax/transformer)
-         racket/match
+(require racket/match
          racket/struct)
 (provide (all-defined-out))
 
-;; ============================================================
-;; Results
+;; A Result represents the result of evaluating an expression. Continuation
+;; jumps are not caught, only escapes via `raise`.
 
-;; A Result is one of
-;; - Any (not result:{values,raised})   -- represents single value other than result:{values,raised}
-;; - (result:values (listof Any))       -- multiple values or single result:{values,raised} value
-;; - (result:raised Any)                -- raised a value (not necessarily exn!)
-(struct result:values (vs) #:transparent
+;; A Result if one of
+;; - (Listof Any)       -- evaluation returned zero or more values
+;; - (raise-result Any) -- raised a value (maybe exn, maybe not)
+(struct raise-result (e)
   #:property prop:custom-write
-  (make-constructor-style-printer (lambda (v) 'values) (lambda (v) (result:values-vs v))))
-(struct result:raised (e) #:transparent
+  (make-constructor-style-printer
+   (lambda (v) 'raise)
+   (lambda (v) (list (raise-result-e v)))))
+
+(define (single-result? r)
+  (and (pair? r) (null? (cdr r))))
+
+(define (multi-values-result? r)
+  (and (list? r) (not (single-result? r))))
+
+;; ----------------------------------------
+
+;; A PrintResult is one of
+;; - Any                            -- returned one value
+;; - (values-result (Listof Any))   -- returned zero, two, or more values
+;; - (raise-result Any)             -- raised a value
+(struct values-result (vs) #:transparent
   #:property prop:custom-write
-  (make-constructor-style-printer (lambda (v) 'raise) (lambda (v) (list (result:raised-e v)))))
+  (make-constructor-style-printer
+   (lambda (v) 'values)
+   (lambda (v) (values-result-vs v))))
 
-(define (result:single? v)
-  (cond [(result:values? v) (and (= (length (result:values-vs v)) 1))]
-        [(result:raised? v) #f]
-        [else #t]))
-(define (make-result:single v)
-  (if (or (result:values? v) (result:raised? v)) (result:values (list v)) v))
-(define (result:single-value v)
-  (cond [(result:values? v) (car (result:values-vs v))]
-        [else v]))
-(define-match-expander result:single
-  (syntax-parser [(_ p) #'(? result:single? (app result:single-value p))])
-  (make-variable-like-transformer #'make-result:single))
-
-;; thunk->result : (-> Any) -> Result
-(define (thunk->result proc)
-  (with-handlers ([(lambda (e) #t) (lambda (e) (result:raised e))])
-    (thunk->values-result proc)))
-
-;; thunk->values-result : (-> Any) -> Result
-;; Like thunk->result, but doesn't catch exceptions.
-(define (thunk->values-result proc)
-  (call-with-values proc (case-lambda [(v) (result:single v)] [vs (result:values vs)])))
-
-;; result->thunk : Result -> (-> Any)
-(define (result->thunk r)
+(define (result->print-result r)
   (match r
-    [(result:single v) (lambda () v)]
-    [(result:values vs) (lambda () (apply values vs))]
-    [(result:raised e) (lambda () (raise e))]))
+    [(list v) v]
+    [(? list? vs) (values-result vs)]
+    [(? raise-result?) r]))
+
+(define (print-result->result pr)
+  (match pr
+    [(values-result vs) vs]
+    [(? raise-result?) pr]
+    [v (list v)]))

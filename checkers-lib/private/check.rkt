@@ -1,99 +1,205 @@
 #lang racket/base
 (require racket/match
          racket/struct
-         "test.rkt"
+         racket/string
          "result.rkt")
 (provide (all-defined-out))
 
 ;; ============================================================
-;; Check
+;; Checkers
 
-(define (run-checkers actual-thunk checkers [loc #f])
-  (define check-ctx (current-check-context))
-  (define actual (thunk->result actual-thunk))
-  (for ([checker (in-list checkers)])
-    (define ctx (vector actual checker loc check-ctx))
-    (with-continuation-mark check-context-key ctx
-      (apply-checker checker actual))))
+;; A Checker is one of
+;; - (checker:equal ValuesResult)
+;; - (checker:custom (X -> Fault)/#f ArityMask (Xs -> Fault)/#f (Any -> Fault)/#f)
+;;   INV: if vcheck, vsmask has bit 1 set; if vsmask != 0, vcheck or vscheck present
+(struct checker ())
+(struct checker:equal checker (toresult))
+(struct checker:custom checker (vcheck vsmask vscheck rcheck info)
+  #:reflection-name 'checker)
+
+(define NONE-MASK 0)
+(define ONE-MASK #b10)
+(define ANY-MASK (bitwise-not NONE-MASK)) ;; -1
+
+(define (checker:predicate pred #:info [info0 #f])
+  (define info
+    (or info0
+        `((#:expected "value satisfying predicate")
+          (predicate ,pred))))
+  (define (vcheck v) (if (pred v) #f '()))
+  (checker:custom vcheck ONE-MASK #f #f info))
+
+(define (checker:compare compare toval)
+  (define info
+    `((#:expected "value satisfying comparison")
+      ("comparison" ,compare)
+      ("compare to" ,toval)))
+  (define (vcheck v) (if (compare v toval) #f '()))
+  (checker:custom vcheck ONE-MASK #f #f info))
+
+(define (checker:values-predicate pred #:info [info0 #f])
+  (define info
+    (or info0
+        `((#:expected "values satisfying predicate")
+          (predicate ,pred))))
+  (define vsmask (procedure-arity-mask pred))
+  (define (vscheck vs) (if (apply pred vs) #f '()))
+  (checker:custom #f vsmask vscheck #f info))
+
+(define (checker:error pred/rx)
+  (match pred/rx
+    [(? procedure? pred)
+     (define info
+       `((#:expected "raised value satisfying predicate")
+         (predicate ,pred)))
+     (define (rcheck v) (if (pred v) #f '()))
+     (checker:custom #f NONE-MASK #f rcheck info)]
+    [(? regexp? rx)
+     (define info
+       `((#:expected "raised exception with message matching regexp")
+         (regexp ,rx)))
+     (define (rcheck v)
+       (cond [(not (exn? v))
+              `((#:failure "raised value is not an exception"))]
+             [(not (regexp-match? rx (exn-message v)))
+              `((#:failure "exception message does not match regexp"))]
+             [else #f]))
+     (checker:custom #f NONE-MASK #f rcheck info)]))
+
+(define (checker:is-true)
+  (let ([info `((#:expected "any true result value"))]
+        [vcheck (lambda (v) (if v #f '()))])
+    (checker:custom vcheck ONE-MASK #f #f info)))
+
+(define (checker:is-value)
+  (let ([info `((#:expected "any result value"))]
+        [vcheck (lambda (v) #f)])
+    (checker:custom vcheck ONE-MASK #f #f info)))
+
+(define (checker:is-values)
+  (let ([info `((#:expected "any result values"))]
+        [vscheck (lambda (vs) #f)])
+    (checker:custom vscheck ANY-MASK vscheck #f info)))
 
 ;; ----------------------------------------
-;; Check info
 
-;; A CheckContext is one of
-;; - #f                                       -- empty context
-;; - (vector Result Checker Loc CheckContext) -- nested check
-;; - (list* Symbol Any CheckContext)          -- user context info
-(define check-context-key (gensym 'check-context))
-(define (current-check-context)
-  (continuation-mark-set-first #f check-context-key))
+;; apply-checkers : (Listof Checker) Result -> Fault
+(define (apply-checkers cs r)
+  (for/or ([c (in-list cs)]) (apply-checker c r)))
 
-(define (fail why . info)
-  (raise (check-failure why info (current-check-context))))
+;; apply-checker : Checker Result -> Fault
+(define (apply-checker c r)
+  (match c
+    [(checker:equal tr)
+     (match r
+       [(? list?)
+        (cond [(equal? r tr) #f]
+              [else `((#:expectvs ,tr)
+                      (#:subfail ,(maybe-wrong-arity (length r) (length tr))))])]
+       [(? raise-result?)
+        `((#:expectvs ,tr)
+          (#:subfail "the expression raised an exception"))])]
+    [(checker:custom vcheck vsmask vscheck rcheck info)
+     (define fault
+       (match r
+         [(list v)
+          #:when vcheck ;; implies (bitwise-bit-set? vsmask 1)
+          (vcheck v)]
+         [(? list? vs)
+          (define vslen (length vs))
+          (cond [(bitwise-bit-set? vsmask vslen) (vscheck vs)]
+                [else `((#:subfail ,(maybe-wrong-arity/mask vslen vsmask)))])]
+         [(raise-result v)
+          (cond [rcheck (rcheck v)]
+                [else `((#:subfail "the expression raised an exception"))])]))
+     (and fault (append fault info))]))
+
+;; maybe-wrong-arity : Nat Nat -> String/#f
+(define (maybe-wrong-arity ngot nwanted)
+  (and (not (= ngot nwanted))
+       (format "wrong number of values: received ~s, expected ~s" ngot nwanted)))
+
+;; maybe-wrong-arity : Nat Integer -> String/#f
+(define (maybe-wrong-arity/mask ngot wantedmask)
+  (if (zero? wantedmask)
+      "the expression did not raise an exception"
+      (and (not (bitwise-bit-set? wantedmask ngot))
+           (format "wrong number of values: received ~s, expected ~a"
+                   ngot (arity-mask->text wantedmask)))))
+
+;; arity-mask->text : Integer -> String
+(define (arity-mask->text vsmask)
+  (define parts
+    (let loop ([n 0] [vsmask vsmask])
+      (cond [(= vsmask 0) null]
+            [(= vsmask -1) (list (format "at least ~s" n))]
+            [(bitwise-bit-set? vsmask 0)
+             (cons (number->string n) (loop (add1 n) (arithmetic-shift vsmask -1)))]
+            [else (loop (add1 n) (arithmetic-shift vsmask -1))])))
+  (string-join parts ", " #:before-last (if (> (length parts) 2) ", or " " or ")))
+
+;; ----------------------------------------
+
+(define (convert-to-checker v)
+  (cond [(checker? v) v]
+        [((current-checker-converter) v) => values]
+        [(and (procedure? v) (procedure-arity-includes? v 1))
+         (checker:predicate v)]
+        [else (error 'check "could not convert to checker: ~e" v)]))
+
+(define current-checker-converter
+  (make-parameter (lambda (v) #f)))
+
+;; ============================================================
+;; Info and Faults
+
+;; InfoList = (Listof (List Key Any))
+;; where Key = Keyword | Symbol | String; keywords reserved for this library.
+
+;; Fault = #f or InfoList, with the following fault keys:
+;; - '#:location  -- added by check/test
+;; - '#:actual    -- value, added by check
+;; - '#:expected  -- string, from checker
+;; - '#:expectvs  -- Result, from checker -- prints as "expected"
+;; - 'predicate, 'regexp, etc   -- (non-kw keys) value, from checker
+;; - '#:failure   -- string, from checker (omit if obvious)
+;; - '#:subfail   -- string, from checker
+;; Fault may be constructed with keys in any order, will be sorted by displayer
+;; into order above. Order of non-kw keys matters, though.
 
 
 ;; ============================================================
-;; Checkers
+;; Check
 
-;; A Checker is an instance of a struct implementing prop:checker
-;; with a value of type (Checker Result -> Void).
-;; A predicate is coerced to a Checker via checker:predicate.
-(define-values (prop:checker checker? checker-ref)
-  (make-struct-type-property 'checker))
+;; A check either returns void or raises a `check-failure` instance (not an exn
+;; subtype). Unlike rackunit, top-level checks do not get wrapped as test cases.
 
-(struct checker:predicate (pred args negate?)
-  #:property prop:custom-write
-  (make-constructor-style-printer
-   (lambda (self) 'predicate-checker)
-   (lambda (self)
-     (match-define (checker:predicate pred args negate?) self)
-     (append (cons pred args)
-             (if negate? (list (unquoted-printing-string "#:negate?") negate?) null))))
-  #:property prop:checker
-  (lambda (self actual)
-    (match-define (checker:predicate pred args negate?) self)
-    (match actual
-      [(result:single value)
-       (unless ((if negate? not values) (apply pred value args))
-         (fail "does not satisfy predicate" #| 'predicate pred |#))]
-      [_ (fail "not a single value" #| 'predicate pred |#)])))
+(define current-info-stack (make-parameter null))
 
-(struct checker:equal (expected)
-  #:property prop:custom-write
-  (make-constructor-style-printer
-   (lambda (self) 'equal-checker)
-   (lambda (self)
-     (if (in-test-display?)
-         ;; redundant with "expected:", so suppress
-         (list (unquoted-printing-string "..."))
-         (list (checker:equal-expected self)))))
-  #:property prop:checker
-  (lambda (self actual)
-    (match-define (checker:equal expected) self)
-    (unless (equal? actual expected)
-      (fail "not equal" 'expected expected))))
+(struct stop-test (info-stack info))
+(struct check-failure stop-test ())
+(struct skip-test stop-test ())
 
-(struct checker:raise (preds)
-  #:property prop:custom-write
-  (make-constructor-style-printer
-   (lambda (self) 'raise-checker)
-   (lambda (self) (checker:raise-preds self)))
-  #:property prop:checker
-  (lambda (self actual)
-    (match-define (checker:raise preds) self)
-    (match actual
-      [(result:raised raised)
-       (for ([pred (in-list preds)])
-         (cond [(regexp? pred)
-                (unless (exn? raised)
-                  (fail "raised value is not exception" 'regexp pred))
-                (unless (regexp-match? pred (exn-message raised))
-                  (fail "exception message does not match regexp" 'regexp pred))]
-               [(procedure? pred)
-                (unless (pred raised)
-                  (fail "raised value does not satisfy predicate" 'predicate pred))]))]
-      [_ (fail "did not raise exception or other value")])))
+(define (make-check-failure info-stack info result fault)
+  (check-failure info-stack (append info `((#:actual ,result)) fault)))
 
-;; apply-checker : Checker Result -> Void
-(define (apply-checker c result)
-  (let ([c (if (checker? c) c (checker:predicate c null #f))])
-    ((checker-ref c) c result)))
+;; Note: evaluation is left-to-right (except info)
+(define-syntax-rule (check* info expr checker ...)
+  (let ([r (catch-result expr)])
+    (let ([fault (apply-checkers (list checker ...) r)])
+      (when fault (raise (make-check-failure (current-info-stack) info r fault)))
+      (void))))
+
+;; ----------------------------------------
+
+;; (catch-result Expr) : Expr[Result]
+;; FIXME: make catch predicate configurable (don't catch exn:break, though!)
+;; FIXME: try to optimize away some with-handlers/call-with-values
+(define-syntax-rule (catch-result expr)
+  (with-handlers ([exn:fail? raise-result])
+    (catch-values expr)))
+
+;; (catch-values Expr) : Expr[ValuesResult]
+;; FIXME: try to optimize away some call-with-values
+(define-syntax-rule (catch-values expr)
+  (call-with-values (lambda () expr) list))
