@@ -51,13 +51,17 @@
     (if line (string-append line "\n") "")))
 
 (define (test-context-full-name ctx)
-  (define (frame-name fr)
-    (or (test-frame-name fr)
-        (let ([loc (test-frame-loc fr)])
-          (and loc (source-location->string loc)))))
-  (match (filter string? (map test-frame-name ctx))
+  (match (filter string? (map test-frame-short-name ctx))
     ['() #f]
     [names (string-join names " > ")]))
+
+(define (test-context-short-name ctx)
+  (and (pair? ctx) (test-frame-short-name (car ctx))))
+
+(define (test-frame-short-name fr)
+  (or (test-frame-name fr)
+      (let ([loc (test-frame-loc fr)])
+        (and loc (source-location->string loc)))))
 
 (define (test-context-xfail? ctx)
   (match ctx
@@ -90,9 +94,9 @@
 ;; - 'skip      -- skipped
 
 ;; make-test-listener : TestListener
-(define (make-test-listener #:print-levels [print-levels 0]
-                            #:print-xfail? [print-xfail? #t]
-                            #:print-skip? [print-skip? #f])
+(define (make-test-listener #:print-names [print-levels 0]
+                            #:show-xfail? [print-xfail? #t]
+                            #:show-skip? [print-skip? #f])
   (define level 0)
   (define (listener ctx event)
     (match event
@@ -100,7 +104,7 @@
        (when (< level print-levels)
          (printf "~a~a\n"
                  (make-string (* 2 level) #\space)
-                 (or (test-context-full-name ctx) "(unnamed test)")))
+                 (or (test-context-short-name ctx) "?")))
        (set! level (add1 level))]
       ['end
        (when (test-context-xfail? ctx)
