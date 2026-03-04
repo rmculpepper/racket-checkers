@@ -32,8 +32,14 @@
   (for ([listener (in-list (current-test-listeners))])
     (listener ctx event)))
 
-;; TestContext = (Listof TestFrame)
+;; ----------------------------------------
+;; Test Contexts
 
+;; TestContext = (Listof TestFrame)
+;; TestFrame = (test-frame String/#f Srcloc/#f)
+(struct test-frame (name loc) #:transparent)
+
+;; current-test-context : Parameter of TestContext
 (define current-test-context (make-parameter null))
 
 (define (test-context-full-name-line ctx)
@@ -53,20 +59,10 @@
       (loc->short-name (test-frame-loc fr))))
 
 (define (loc->short-name loc)
-  (define src (source-location-source loc))
-  (define src* (if (path? src) (file-name-from-path src) src))
-  (source-location->string (update-source-location loc #:source src*)))
-
-(define (test-context-xfail? ctx)
-  (match ctx
-    [(cons (test-frame _ _ opts) _)
-     (and (memq 'xfail opts) #t)]
-    [_ #f]))
-
-;; TestFrame = (test-frame String/#f Srcloc/#f (Listof TestOption))
-;; where TestOption is one of the following:
-;; - 'xfail     -- indicates test is expected to fail
-(struct test-frame (name loc opts) #:transparent)
+  (and (source-location-known? loc)
+       (let ([src (source-location-source loc)])
+         (define src* (if (path? src) (file-name-from-path src) src))
+         (source-location->string (update-source-location loc #:source src*)))))
 
 ;; ----------------------------------------
 ;; Test Listeners
@@ -79,15 +75,13 @@
 ;; - CheckFailure
 ;; - SkipTest
 
-;; TestState is one of 'pass, 'fail, 'xfail, 'xpass, 'skip, 'incomplete
-;; where 'xfail means "expected fail", 'xpass means "unexpected pass"
-;; ('xpass seems like wrong abbrev, but also seems standard),
+;; TestState is one of 'pass, 'fail, 'skip, 'incomplete
 ;; and 'incomplete means no test end reported.
 
 ;; make-test-listener : ... -> TestListener
 (define (make-test-listener #:tell-raco? [tell-raco? #t]
                             #:trace [print-levels 0]
-                            #:print-states [print-states '(fail xfail xpass)])
+                            #:print-states [print-states '(fail)])
   (define cv (make-counter-vector))
   (define (tell s)
     (counter-incr! cv s 1)
@@ -104,15 +98,13 @@
                  (make-string (* level 2) #\space)
                  (or (test-context-short-name ctx) "?")))]
       ['end
-       (define state (if (test-context-xfail? ctx) 'xpass 'pass))
-       (tell state)
-       (when (memq state print-states)
-         (print-pass ctx state))]
+       (tell 'pass)
+       (when (memq 'pass print-states)
+         (print-pass ctx))]
       [(? check-failure? cf)
-       (define state (if (test-context-xfail? ctx) 'xfail 'fail))
-       (tell state)
-       (when (memq state print-states)
-         (print-fail ctx cf state))]
+       (tell 'fail)
+       (when (memq 'fail print-states)
+         (print-fail ctx cf))]
       [(? skip-test? sk)
        (tell 'skip)
        (when (memq 'skip print-states)
@@ -131,9 +123,9 @@
   listener)
 
 (define end-states
-  '(pass fail skip xfail xpass))
+  '(pass fail skip))
 (define counter-slots
-  '#(start pass fail skip xfail xpass))
+  '#(start pass fail skip))
 (define (make-counter-vector)
   (make-vector (vector-length counter-slots) 0))
 (define (slot-index s)
@@ -146,16 +138,14 @@
 
 (define (tell-raco s)
   (case s
-    [(pass xfail) (test-log! #t)]
-    [(fail xpass) (test-log! #f)]
-    [(skip) (void)]))
+    [(pass) (test-log! #t)]
+    [(fail) (test-log! #f)]
+    [else (void)]))
 
-(define (print-pass ctx state)
+(define (print-pass ctx)
   (write-string bar-line)
   (write-string (test-context-full-name-line ctx))
-  (case state
-    [(pass) (write-string "PASS\n")]
-    [(xpass) (write-string "XPASS\n")])
+  (write-string "PASS\n")
   (write-string bar-line)
   (void))
 
@@ -174,9 +164,7 @@
       [#f (void)]))
   (write-string bar-line)
   (write-string (test-context-full-name-line ctx))
-  (case state
-    [(fail) (write-string "FAIL\n")]
-    [(xfail) (write-string "XFAIL\n")])
+  (write-string "FAIL\n")
   (print-info '#:location "location" 'display
               #:if source-location? #:map source-location->string)
   (print-info '#:actual "actual" 'value #:map result->print-result)

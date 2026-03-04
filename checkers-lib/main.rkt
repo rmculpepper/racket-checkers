@@ -140,7 +140,7 @@
 (define (run-tests proc
                    #:trace [level 0]
                    #:tell-raco? [tell-raco? #t]
-                   #:count-states [count-states '(fail)])
+                   #:count-states [count-states '(fail incomplete)])
   (define listener
     (make-test-listener #:tell-raco? tell-raco?
                         #:trace (case level [(#t) +inf.0] [else level])))
@@ -148,23 +148,19 @@
                  (current-test-listeners (list listener)))
     (call-with-continuation-barrier proc))
   (define ch (listener null 'get-counters))
-  (let ([start (hash-ref ch 'start)]
-        [pass (hash-ref ch 'pass)]
-        [fail (hash-ref ch 'fail)]
-        [skip (hash-ref ch 'skip)]
-        [xfail (hash-ref ch 'xfail)]
-        [xpass (hash-ref ch 'xpass)]
-        [incomplete (hash-ref ch 'incomplete)])
-    (print-summary start pass fail skip xfail xpass incomplete)
+  (let ([start (hash-ref ch 'start 0)]
+        [pass (hash-ref ch 'pass 0)]
+        [fail (hash-ref ch 'fail 0)]
+        [skip (hash-ref ch 'skip 0)]
+        [incomplete (hash-ref ch 'incomplete 0)])
+    (print-summary start pass fail skip incomplete)
     (for/sum ([st (in-list count-states)]) (hash-ref ch st 0))))
 
-(define (print-summary start pass fail skip xfail xpass incomplete)
+(define (print-summary start pass fail skip incomplete)
   (define (ifnz n label) (if (zero? n) "" (format ", ~s ~a" n label)))
   (write-string
    (string-append (format "~s test(s) run: ~s pass" start pass)
                   (ifnz skip "skip")
-                  (ifnz xfail "xfail")
-                  (ifnz xpass "xpass")
                   (ifnz fail "fail")
                   (ifnz incomplete "incomplete")
                   "\n"))
