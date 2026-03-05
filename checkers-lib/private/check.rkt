@@ -21,13 +21,31 @@
 (define ONE-MASK #b10)
 (define ANY-MASK (bitwise-not NONE-MASK)) ;; -1
 
-(define (checker:predicate pred #:info [info0 #f])
+(define (checker:not-equal othervs)
+  (define info
+    (cond [(= 1 (length othervs))
+           `((#:expected "value not equal to other")
+             (#:othervs ,othervs))]
+          [else
+           `((#:expected "values not equal to other, but same number")
+             (#:othervs ,othervs))]))
+  (define vsmask (arithmetic-shift 1 (length othervs)))
+  (define (vscheck vs) (if (equal? vs othervs) '() #f))
+  (checker:custom #f vsmask vscheck #f info))
+
+(define (checker:predicate pred [arity-mask ANY-MASK] #:info [info0 #f])
+  (define vsmask (bitwise-and arity-mask (procedure-arity-mask pred)))
   (define info
     (or info0
-        `((#:expected "value satisfying predicate")
-          (predicate ,pred))))
-  (define (vcheck v) (if (pred v) #f '()))
-  (checker:custom vcheck ONE-MASK #f #f info))
+        (cond [(= vsmask 1)
+               `((#:expected "value satisfying predicate")
+                 (predicate ,pred))]
+              [else
+               `((#:expected "values satifying predicate")
+                 (predicate ,pred)
+                 ("number of values" ,(arity-mask->text vsmask)))])))
+  (define (vscheck vs) (if (apply pred vs) #f '()))
+  (checker:custom #f vsmask vscheck #f info))
 
 (define (checker:compare compare toval)
   (define info
@@ -36,15 +54,6 @@
       ("compare to" ,toval)))
   (define (vcheck v) (if (compare v toval) #f '()))
   (checker:custom vcheck ONE-MASK #f #f info))
-
-(define (checker:values-predicate pred #:info [info0 #f])
-  (define info
-    (or info0
-        `((#:expected "values satisfying predicate")
-          (predicate ,pred))))
-  (define vsmask (procedure-arity-mask pred))
-  (define (vscheck vs) (if (apply pred vs) #f '()))
-  (checker:custom #f vsmask vscheck #f info))
 
 (define (checker:error pred/rx)
   (match pred/rx
@@ -71,15 +80,10 @@
         [vcheck (lambda (v) (if v #f '()))])
     (checker:custom vcheck ONE-MASK #f #f info)))
 
-(define (checker:is-value)
-  (let ([info `((#:expected "any result value"))]
-        [vcheck (lambda (v) #f)])
-    (checker:custom vcheck ONE-MASK #f #f info)))
-
-(define (checker:is-values)
-  (let ([info `((#:expected "any result values"))]
+(define (checker:no-error)
+  (let ([info `((#:expected "does not raise an exception"))]
         [vscheck (lambda (vs) #f)])
-    (checker:custom vscheck ANY-MASK vscheck #f info)))
+    (checker:custom #f ANY-MASK vscheck #f info)))
 
 ;; ----------------------------------------
 
@@ -117,14 +121,14 @@
 ;; maybe-wrong-arity : Nat Nat -> String/#f
 (define (maybe-wrong-arity ngot nwanted)
   (and (not (= ngot nwanted))
-       (format "wrong number of values: received ~s, expected ~s" ngot nwanted)))
+       (format "wrong number of values: got ~s, expected ~s" ngot nwanted)))
 
 ;; maybe-wrong-arity : Nat Integer -> String/#f
 (define (maybe-wrong-arity/mask ngot wantedmask)
   (if (zero? wantedmask)
       "the expression did not raise an exception"
       (and (not (bitwise-bit-set? wantedmask ngot))
-           (format "wrong number of values: received ~s, expected ~a"
+           (format "wrong number of values: got ~s, expected ~a"
                    ngot (arity-mask->text wantedmask)))))
 
 ;; arity-mask->text : Integer -> String
@@ -144,7 +148,7 @@
   (cond [(checker? v) v]
         [((current-checker-converter) v) => values]
         [(and (procedure? v) (procedure-arity-includes? v 1))
-         (checker:predicate v)]
+         (checker:predicate v 1)]
         [else (error 'check "could not convert to checker: ~e" v)]))
 
 (define current-checker-converter
@@ -161,6 +165,7 @@
 ;; - '#:actual    -- value, added by check
 ;; - '#:expected  -- string, from checker
 ;; - '#:expectvs  -- Result, from checker -- prints as "expected"
+;; - '#:othervs   -- Result, from checker -- prints as "other"
 ;; - 'predicate, 'regexp, etc   -- (non-kw keys) value, from checker
 ;; - '#:failure   -- string, from checker (omit if obvious)
 ;; - '#:subfail   -- string, from checker
@@ -187,6 +192,11 @@
     (let ([fault (apply-checkers (list checker ...) r)])
       (when fault (raise (make-check-failure info r fault)))
       (void))))
+
+;; skip-test : -> Escapes
+;; FIXME: add optional info
+(define (skip-test)
+  (raise (skip-test-signal null)))
 
 ;; ----------------------------------------
 

@@ -167,8 +167,9 @@
   (print-info '#:location "location" 'display
               #:if source-location? #:map source-location->string)
   (print-info '#:actual "actual" 'value #:map result->print-result)
-  (print-info '#:expectvs "expected" 'value #:map result->print-result)
   (print-info '#:expected "expected" 'display #:if string?)
+  (print-info '#:expectvs "expected" 'value #:map result->print-result)
+  (print-info '#:othervs "other" 'value #:map result->print-result)
   (for ([e (in-list info)] #:when (or (symbol? (car e)) (string? (car e))))
     (printkv (format "~a" (car e)) 'value (cadr e)))
   (print-info '#:failure "failure" 'display #:if string?)
