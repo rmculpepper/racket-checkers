@@ -11,6 +11,8 @@
          check
          checker?
          skip-test
+         (rename-out [checker:equal* checker:equal])
+         (rename-out [checker:not-equal* checker:not-equal])
          (contract-out
           [checker:predicate
            (->* [procedure?] [exact-integer?] checker?)]
@@ -84,6 +86,16 @@
     [(_ actual:expr c:checker-clause ...)
      #`(let ([info `((#:location ,#,(stx->loc-expr this-syntax)))])
          (check* info actual c.checker ...))]))
+
+(define-syntax checker:equal*
+  (syntax-parser
+    [(_ expected:expr)
+     #'(checker:equal (catch-values expected))]))
+
+(define-syntax checker:not-equal*
+  (syntax-parser
+    [(_ unexpected:expr)
+     #'(checker:not-equal (catch-values unexpected))]))
 
 ;; ============================================================
 ;; Run
