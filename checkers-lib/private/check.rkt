@@ -184,7 +184,6 @@
 
 (struct test-signal (info))
 (struct check-failure test-signal ())
-(struct skip-test-signal test-signal ())
 
 (define (make-check-failure info result fault)
   (check-failure (append info `((#:actual ,result)) fault)))
@@ -195,11 +194,6 @@
     (let ([fault (apply-checkers (list checker ...) r)])
       (when fault (raise (make-check-failure info r fault)))
       (void))))
-
-;; skip-test : -> Escapes
-;; FIXME: add optional info
-(define (skip-test)
-  (raise (skip-test-signal null)))
 
 ;; ----------------------------------------
 

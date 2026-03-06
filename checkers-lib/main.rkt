@@ -13,7 +13,6 @@
 (provide test
          check
          checker?
-         skip-test
          (rename-out [checker:equal* checker:equal])
          (rename-out [checker:not-equal* checker:not-equal])
          (contract-out
@@ -118,16 +117,14 @@
   (let ([start (hash-ref ch 'start 0)]
         [pass (hash-ref ch 'pass 0)]
         [fail (hash-ref ch 'fail 0)]
-        [skip (hash-ref ch 'skip 0)]
         [incomplete (hash-ref ch 'incomplete 0)])
-    (print-summary start pass fail skip incomplete)
+    (print-summary start pass fail incomplete)
     (for/sum ([st (in-list count-states)]) (hash-ref ch st 0))))
 
-(define (print-summary start pass fail skip incomplete)
+(define (print-summary start pass fail incomplete)
   (define (ifnz n label) (if (zero? n) "" (format ", ~s ~a" n label)))
   (write-string
    (string-append (format "~s test(s) run: ~s pass" start pass)
-                  (ifnz skip "skip")
                   (ifnz fail "fail")
                   (ifnz incomplete "incomplete")
                   "\n"))

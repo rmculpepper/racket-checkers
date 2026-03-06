@@ -14,7 +14,7 @@
 ;; ----------------------------------------
 ;; Test
 
-;; Tests only catch raises from check and skip-test; other exceptions indicate
+;; Tests only catch raises from check; other exceptions indicate
 ;; bugs in test program. Test does not detect continuation escapes.
 
 ;; test* : String/#f Srcloc/#f (Listof TestOption) (-> Any) -> Void
@@ -76,9 +76,8 @@
 ;; - 'start
 ;; - 'end
 ;; - CheckFailure
-;; - SkipTest
 
-;; TestState is one of 'pass, 'fail, 'skip, 'incomplete
+;; TestState is one of 'pass, 'fail, 'incomplete
 ;; and 'incomplete means no test end reported.
 
 ;; make-test-listener : ... -> TestListener
@@ -110,10 +109,6 @@
        (tell 'fail)
        (when (memq 'fail print-states)
          (print-fail ctx info (get-out)))]
-      [(skip-test-signal info)
-       (tell 'skip)
-       (when (memq 'skip print-states)
-         (print-skip ctx info (get-out)))]
       ;; --------------------
       ;; Query methods (ctx unused)
       ['get-counters
@@ -128,9 +123,9 @@
   listener)
 
 (define end-states
-  '(pass fail skip))
+  '(pass fail))
 (define counter-slots
-  '#(start pass fail skip))
+  '#(start pass fail))
 (define (make-counter-vector)
   (make-vector (vector-length counter-slots) 0))
 (define (slot-index s)
@@ -151,13 +146,6 @@
   (write-string bar-line out)
   (write-string (test-context-full-name-line ctx) out)
   (write-string "PASS\n" out)
-  (write-string bar-line out)
-  (void))
-
-(define (print-skip ctx info out)
-  (write-string bar-line out)
-  (write-string (test-context-full-name-line ctx) out)
-  (write-string "SKIP\n" out)
   (write-string bar-line out)
   (void))
 
