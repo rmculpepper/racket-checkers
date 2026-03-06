@@ -44,6 +44,7 @@
 ## Checkers
 
 - expose checker interface -- yes, but not soon
+- `checker:regexp`
 
 ## UI
 
