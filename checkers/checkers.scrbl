@@ -223,14 +223,15 @@ Returns checkers corresponding to @racket[check]'s @racket[#:is] and
 }
 
 @defproc[(checker:predicate [predicate procedure?]
-                            [arity-mask (or/c exact-integer? #f)
+                            [arity-mask exact-integer?
                                         (procedure-arity-mask predicate)])
          checker?]{
 
 Returns a checker that accepts a result @racket[(values _v ...)] if
 @racket[(predicate _v ...)] returns a true value. If @racket[arity-mask] is
 given, then it is used to reject results having the wrong number of values
-before @racket[predicate] is applied.
+before @racket[predicate] is applied. (Note: @racket[arity-mask] is a bit-mask,
+not a single arity; see @racket[procedure-arity-mask].)
 }
 
 @defproc[(checker:compare [compare (-> any/c any/c any/c)]
