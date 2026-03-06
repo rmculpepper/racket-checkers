@@ -79,9 +79,11 @@
 ;; and 'incomplete means no test end reported.
 
 ;; make-test-listener : ... -> TestListener
-(define (make-test-listener #:tell-raco? [tell-raco? #t]
+(define (make-test-listener #:out [out (current-error-port)] ;; OutPort or (-> OutPort)
+                            #:tell-raco? [tell-raco? #t]
                             #:trace [print-levels 0]
                             #:print-states [print-states '(fail)])
+  (define (get-out) (if (procedure? out) (out) out))
   (define cv (make-counter-vector))
   (define (tell s)
     (counter-incr! cv s 1)
@@ -100,15 +102,15 @@
       ['end
        (tell 'pass)
        (when (memq 'pass print-states)
-         (print-pass ctx))]
+         (print-pass ctx (get-out)))]
       [(check-failure info)
        (tell 'fail)
        (when (memq 'fail print-states)
-         (print-fail ctx info))]
+         (print-fail ctx info (get-out)))]
       [(skip-test-signal info)
        (tell 'skip)
        (when (memq 'skip print-states)
-         (print-skip ctx info))]
+         (print-skip ctx info (get-out)))]
       ;; --------------------
       ;; Query methods (ctx unused)
       ['get-counters
@@ -142,28 +144,28 @@
     [(fail) (test-log! #f)]
     [else (void)]))
 
-(define (print-pass ctx)
-  (write-string bar-line)
-  (write-string (test-context-full-name-line ctx))
-  (write-string "PASS\n")
-  (write-string bar-line)
+(define (print-pass ctx out)
+  (write-string bar-line out)
+  (write-string (test-context-full-name-line ctx) out)
+  (write-string "PASS\n" out)
+  (write-string bar-line out)
   (void))
 
-(define (print-skip ctx info)
-  (write-string bar-line)
-  (write-string (test-context-full-name-line ctx))
-  (write-string "SKIP\n")
-  (write-string bar-line)
+(define (print-skip ctx info out)
+  (write-string bar-line out)
+  (write-string (test-context-full-name-line ctx) out)
+  (write-string "SKIP\n" out)
+  (write-string bar-line out)
   (void))
 
-(define (print-fail ctx info)
+(define (print-fail ctx info out)
   (define (print-info key label mode #:if [ok? void] #:map [f values])
     (match (assoc key info)
-      [(list _ v) (printkv label mode (f v))]
+      [(list _ v) (when (ok? v) (printkv label mode (f v) out))]
       [#f (void)]))
-  (write-string bar-line)
-  (write-string (test-context-full-name-line ctx))
-  (write-string "FAIL\n")
+  (write-string bar-line out)
+  (write-string (test-context-full-name-line ctx) out)
+  (write-string "FAIL\n" out)
   (print-info '#:location "location" 'display
               #:if source-location? #:map source-location->string)
   (print-info '#:actual "actual" 'value #:map result->print-result)
@@ -171,25 +173,25 @@
   (print-info '#:expectvs "expected" 'value #:map result->print-result)
   (print-info '#:othervs "other" 'value #:map result->print-result)
   (for ([e (in-list info)] #:when (or (symbol? (car e)) (string? (car e))))
-    (printkv (format "~a" (car e)) 'value (cadr e)))
+    (printkv (format "~a" (car e)) 'value (cadr e) out))
   (print-info '#:failure "failure" 'display #:if string?)
   (print-info '#:subfail "detail" 'display #:if string?)
-  (write-string bar-line)
+  (write-string bar-line out)
   (void))
 
-(define (printkv k mode v)
+(define (printkv k mode v out)
   (define KEYLEN 12)
   (define key (format "~a: " k))
   (define pad (make-string (max 0 (- KEYLEN (string-length key))) #\space))
   (case mode
     ((display)
-     (printf "~a~a~a\n" key pad v))
+     (fprintf out "~a~a~a\n" key pad v))
     ((value)
-     (printf "~a~a~e\n" key pad v))))
+     (fprintf out "~a~a~e\n" key pad v))))
 
 (define bar-line "--------------------\n")
 
 ;; current-test-listeners : Parameter of (Listof TestListener)
 (define current-test-listeners
   (make-parameter
-   (list (make-test-listener))))
+   (list (make-test-listener #:out current-error-port))))

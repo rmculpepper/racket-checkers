@@ -148,7 +148,7 @@
   (cond [(checker? v) v]
         [((current-checker-converter) v) => values]
         [(and (procedure? v) (procedure-arity-includes? v 1))
-         (checker:predicate v 1)]
+         (checker:predicate v ONE-MASK)]
         [else (error 'check "could not convert to checker: ~e" v)]))
 
 (define current-checker-converter

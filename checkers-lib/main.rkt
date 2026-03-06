@@ -22,9 +22,8 @@
            (-> (or/c (-> any/c any/c) regexp?) checker?)]
           [run-tests
            (->* [(-> any)]
-                [#:trace (or/c exact-nonnegative-integer? +inf.0 #t)
-                 #:tell-raco? boolean?
-                 #:count-states (listof symbol?)]
+                [#:out (or/c output-port? (-> output-port?))
+                 #:tell-raco? boolean?]
                 exact-nonnegative-integer?)]))
 
 ;; This is my bikeshed. There are many like it, but this one is mine.
@@ -101,11 +100,13 @@
 ;; Run
 
 (define (run-tests proc
+                   #:out [out (current-error-port)]
                    #:trace [level 0]
                    #:tell-raco? [tell-raco? #t]
                    #:count-states [count-states '(fail incomplete)])
   (define listener
-    (make-test-listener #:tell-raco? tell-raco?
+    (make-test-listener #:out out
+                        #:tell-raco? tell-raco?
                         #:trace (case level [(#t) +inf.0] [else level])))
   (parameterize ((current-test-context null)
                  (current-test-listeners (list listener)))
