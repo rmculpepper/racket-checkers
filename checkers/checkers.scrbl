@@ -4,7 +4,7 @@
                      racket/contract
                      racket/match
                      raco/testing
-                     syntax/location
+                     syntax/srcloc
                      checkers))
 
 @title{checkers: Testing Framework}
