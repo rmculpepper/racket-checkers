@@ -1,6 +1,9 @@
 #lang scribble/manual
 @(require scribble/example
           (for-label racket/base
+                     racket/contract
+                     racket/match
+                     raco/testing
                      syntax/location
                      checkers))
 
@@ -17,8 +20,8 @@ This library provides a simple testing framework.
 @; ------------------------------------------------------------
 @section[#:tag "intro"]{Introduction to Checkers}
 
-A test is written as a @racket[test] expression, and it usually contains one or
-more @racket[check] expressions. Tests are actions, not values: a @racket[test]
+A test is written as a @racket[test] expression, usually containing one or more
+@racket[check] expressions. Tests are actions, not values: a @racket[test]
 expression's body is immediately executed, and the test expression returns
 @racket[(void)]. Tests may be anonymous or named.
 
@@ -36,11 +39,11 @@ the enclosing test stops.
 (test
   (check (+ 1 1) #:is 2)
   (check (+ 2 2) #:is 5) (code:comment "whoops")
-  (printf "this line is not printed\n"))
+  (printf "this is not printed\n"))
 ]
 
 The @racket[check] form catches exceptions and multiple values in the ``actual''
-expression, and it supports several kinds of assertions about its result.
+expression and supports several kinds of assertions about its result.
 
 @examples[#:eval the-eval #:label #f
 (test #:name "arithmetic"
@@ -236,7 +239,7 @@ Returns a checker that accepts a result if it is a single value @racket[_v] such
 that @racket[(compare _v compare-to)] returns a true value.
 }
 
-@defproc[(checker:error [predicate (or/c (-> any/c any/c) regexp?)])
+@defproc[(checker:error [pred/rx (or/c (-> any/c any/c) regexp?)])
          checker?]{
 
 Returns a checker that accepts a result if it represents @racket[(raise _v)] and
@@ -250,7 +253,8 @@ procedure, the check succeeds if @racket[(pred/rx _v)] returns a true value; if
 @subsection[#:tag "api-run"]{Running Tests}
 
 @defproc[(run-tests [proc (-> any)]
-                    [#:out out output-port? (current-error-port)]
+                    [#:out out (or/c output-port? (-> output-port?))
+                           (current-error-port)]
                     [#:tell-raco? tell-raco? boolean? #t])
          exact-nonnegative-integer?]{
 
