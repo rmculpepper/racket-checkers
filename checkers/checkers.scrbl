@@ -90,7 +90,7 @@ given, it is used as the test's location; otherwise the location is taken from
 If a @racket[check] expression is executed during the evaluation of the test
 body, then evaluation of the test stops and the test is marked as
 @emph{failed}. If @racket[skip-test] is called during the evaluation of the test
-body, then the evaluation of the test stops and the test is makred as
+body, then the evaluation of the test stops and the test is marked as
 @emph{skipped}. Otherwise, if evaluation of the test body completes, the test is
 marked as @emph{passed}. Checks and skips are implemented by calling
 @racket[raise] with special non-exception values. The @racket[test] form only
@@ -128,6 +128,8 @@ that does not satisfy @racket[exn:fail?], its result is not caught by
 @racket[check]. In particular, @racket[check] does not catch breaks
 (@racket[exn:break]).
 
+The following forms of @svar[check-clause] are supported:
+
 @specsubform[(code:line #:is expected-expr)]{
 
 Succeeds if the actual result is equal (@racket[equal?]) to the result of
@@ -152,17 +154,17 @@ Equivalent to @racket[#:with (checker:not-equal unexpected-expr)].
 
 Succeeds if the actual result is a single value that is not @racket[#f].
 
-@;{ Equivalent to @racket[#:with (checker:is-true)]. }
+Equivalent to @racket[#:with (λ (v) v)], except for the information accompanying
+a check failure.
 }
 
 @specsubform[(code:line #:match expected-pattern)]{
 
 Succeeds if the actual result is a single value matching the @racket[match]
-pattern That is, it is accepted if @racket[(match actual-expr [expected-pattern
-#t] [_ #f])] would have returned true.
+pattern.
 
-Equivalent to @racket[#:with (λ (v) (match v [pattern #t] [_ #f]))], except for
-the information accompanying check failures.
+Equivalent to @racket[#:with (λ (v) (match v [expected-pattern #t] [_ #f]))],
+except for the information accompanying a check failure.
 }
 
 @specsubform[(code:line #:error predicate/regexp-expr)]{
