@@ -89,16 +89,14 @@ given, it is used as the test's location; otherwise the location is taken from
 
 If a @racket[check] expression is executed during the evaluation of the test
 body, then evaluation of the test stops and the test is marked as
-@emph{failed}. If @racket[skip-test] is called during the evaluation of the test
-body, then the evaluation of the test stops and the test is marked as
-@emph{skipped}. Otherwise, if evaluation of the test body completes, the test is
-marked as @emph{passed}. Checks and skips are implemented by calling
-@racket[raise] with special non-exception values. The @racket[test] form only
-catches these values; it does not catch exceptions.
+@emph{failed}. Otherwise, if evaluation of the test body completes, the test is
+marked as @emph{passed}. Checks are implemented by calling @racket[raise] with
+special non-exception values. The @racket[test] form only catches these values;
+it does not catch exceptions.
 
 Tests may execute nested tests. The inner test inherits the outer test's name as
-a prefix. Checks and skips only affect the immediately enclosing test; the
-failure of an inner nested test does not cause the outer test to fail.
+a prefix. Checks only affect the immediately enclosing test; the failure of an
+inner nested test does not cause the outer test to fail.
 }
 
 @defform[(check actual-expr check-clause ...)
@@ -194,15 +192,6 @@ accepted (single value, multiple values, or raised exception) depends on the
 checker.
 }
 
-}
-
-@defproc[(skip-test) none/c]{
-
-Ends the execution of the current test and marks it as @emph{skipped}. A test
-may be ``skipped'' even if it has already executed checks and nested tests.
-
-The @racket[skip-test] procedure works by raising an opaque non-exception value,
-so it should not be used outside of a test.
 }
 
 @defproc[(checker? [v any/c]) boolean?]{
