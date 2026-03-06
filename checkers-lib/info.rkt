@@ -4,7 +4,7 @@
 
 (define version "0.1")
 (define collection "checkers")
-(define deps '("base"))
+(define deps '("base" "compiler-lib"))
 (define pkg-authors '(ryanc))
 
 ;; collection info
