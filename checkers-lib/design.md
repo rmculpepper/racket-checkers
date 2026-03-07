@@ -16,6 +16,13 @@
 
 # Feature plans and anti-plans
 
+- change from "actual/expected" to "got/wanted"?
+- add option to `check` to return values / re-raise exn
+  - `#:forward-result` - returns values or re-raises exn
+  - `#:values` = `#:no-error #:forward-result`
+- add option to `test` to catch exceptions (`#:catch`?)
+  - add "test-error" status, or treat as if check failure?
+
 ## Test
 
 - skip -- probably not, use let/ec
