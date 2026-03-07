@@ -88,7 +88,7 @@
     (pattern (~seq #:values)
              #:with (checker ...) (list #'(checker:no-error))
              #:with fwd? #'#t)
-    (pattern (~seq #:forward-result)
+    (pattern (~seq #:forward)
              #:with (checker ...) '()
              #:with fwd? #'#t)))
 
