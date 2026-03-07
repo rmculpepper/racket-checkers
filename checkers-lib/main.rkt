@@ -71,11 +71,11 @@
     ;; single-value checkers
     (pattern (~seq #:is-true)
              #:with checker #'(checker:is-true))
-    (pattern (~seq #:match pattern:expr)
+    (pattern (~seq #:match expected-pattern:expr)
              #:with checker #'(checker:predicate
-                               (lambda (v) (match v [pattern #t] [_ #f]))
+                               (lambda (v) (match v [expected-pattern #t] [_ #f]))
                                #:info `((expected "result value matching pattern")
-                                        (pattern (quote pattern)))))
+                                        (pattern expected-pattern))))
     ;; raise/error checkers
     (pattern (~seq #:error predicate/regexp:expr)
              #:with checker #'(checker:error predicate/regexp))
@@ -85,7 +85,7 @@
 (define-syntax check
   (syntax-parser
     [(_ actual:expr c:checker-clause ...)
-     #`(let ([info `((#:location ,#,(stx->loc-expr this-syntax)))])
+     #`(let ([info `((location ,#,(stx->loc-expr this-syntax)))])
          (check* info actual c.checker ...))]))
 
 (define-syntax checker:equal*
