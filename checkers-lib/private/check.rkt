@@ -59,16 +59,16 @@
   (match pred/rx
     [(? procedure? pred)
      (define info
-       `((expected "raised value satisfying predicate")
+       `((expected "raises exception satisfying predicate")
          (predicate ,pred)))
      (define (rcheck v) (if (pred v) #f '()))
      (checker:custom NONE-MASK #f rcheck info)]
     [(? regexp? rx)
      (define info
-       `((expected "raised exception with message matching regexp")
+       `((expected "raises exception with message matching regexp")
          (regexp ,rx)))
      (define (rcheck v)
-       (cond [(not (exn? v))
+       (cond [(not (exn? v))  ;; currently not possible
               `((failure "raised value is not an exception"))]
              [(not (regexp-match? rx (exn-message v)))
               `((failure "exception message does not match regexp"))]
@@ -133,7 +133,8 @@
   (define parts
     (let loop ([n 0] [vsmask vsmask])
       (cond [(= vsmask 0) null]
-            [(= vsmask -1) (list (format "at least ~s" n))]
+            [(= vsmask -1)
+             (list (if (zero? n) "any number" (format "at least ~s" n)))]
             [(bitwise-bit-set? vsmask 0)
              (cons (number->string n) (loop (add1 n) (arithmetic-shift vsmask -1)))]
             [else (loop (add1 n) (arithmetic-shift vsmask -1))])))
