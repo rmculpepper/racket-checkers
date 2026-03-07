@@ -5,6 +5,7 @@
 (require racket/match
          racket/struct
          racket/string
+         syntax/srcloc
          "result.rkt")
 (provide (all-defined-out))
 
@@ -25,14 +26,10 @@
 (define ANY-MASK (bitwise-not NONE-MASK)) ;; -1
 
 (define (checker:not-equal othervs)
-  (define info
-    (cond [(= 1 (length othervs))
-           `((#:expected "value not equal to other")
-             (#:othervs ,othervs))]
-          [else
-           `((#:expected "values not equal to other, but same number")
-             (#:othervs ,othervs))]))
   (define vsmask (arithmetic-shift 1 (length othervs)))
+  (define info
+    `((expnotvs ,othervs)
+      #;(vsmask ,vsmask)))
   (define (vscheck vs) (if (equal? vs othervs) '() #f))
   (checker:custom #f vsmask vscheck #f info))
 
@@ -40,21 +37,21 @@
   (define vsmask (bitwise-and arity-mask (procedure-arity-mask pred)))
   (define info
     (or info0
-        (cond [(= vsmask 1)
-               `((#:expected "value satisfying predicate")
+        (cond [(= vsmask ONE-MASK)
+               `((expected "value satisfying predicate")
                  (predicate ,pred))]
               [else
-               `((#:expected "values satifying predicate")
+               `((expected "value(s) satifying predicate")
                  (predicate ,pred)
-                 ("number of values" ,(arity-mask->text vsmask)))])))
+                 (vsmask ,vsmask))])))
   (define (vscheck vs) (if (apply pred vs) #f '()))
   (checker:custom #f vsmask vscheck #f info))
 
 (define (checker:compare compare toval)
   (define info
-    `((#:expected "value satisfying comparison")
-      ("comparison" ,compare)
-      ("compare to" ,toval)))
+    `((expected "value satisfying comparison")
+      (comparison ,compare)
+      (compare-v ,toval)))
   (define (vcheck v) (if (compare v toval) #f '()))
   (checker:custom vcheck ONE-MASK #f #f info))
 
@@ -62,29 +59,29 @@
   (match pred/rx
     [(? procedure? pred)
      (define info
-       `((#:expected "raised value satisfying predicate")
+       `((expected "raised value satisfying predicate")
          (predicate ,pred)))
      (define (rcheck v) (if (pred v) #f '()))
      (checker:custom #f NONE-MASK #f rcheck info)]
     [(? regexp? rx)
      (define info
-       `((#:expected "raised exception with message matching regexp")
+       `((expected "raised exception with message matching regexp")
          (regexp ,rx)))
      (define (rcheck v)
        (cond [(not (exn? v))
-              `((#:failure "raised value is not an exception"))]
+              `((failure "raised value is not an exception"))]
              [(not (regexp-match? rx (exn-message v)))
-              `((#:failure "exception message does not match regexp"))]
+              `((failure "exception message does not match regexp"))]
              [else #f]))
      (checker:custom #f NONE-MASK #f rcheck info)]))
 
 (define (checker:is-true)
-  (let ([info `((#:expected "any true result value"))]
+  (let ([info `((expected "any true result value"))]
         [vcheck (lambda (v) (if v #f '()))])
     (checker:custom vcheck ONE-MASK #f #f info)))
 
 (define (checker:no-error)
-  (let ([info `((#:expected "does not raise an exception"))]
+  (let ([info `((expected "does not raise an exception"))]
         [vscheck (lambda (vs) #f)])
     (checker:custom #f ANY-MASK vscheck #f info)))
 
@@ -101,11 +98,11 @@
      (match r
        [(? list?)
         (cond [(equal? r tr) #f]
-              [else `((#:expectvs ,tr)
-                      (#:subfail ,(maybe-wrong-arity (length r) (length tr))))])]
+              [else `((expectvs ,tr)
+                      (prefail ,(maybe-wrong-arity (length r) (length tr))))])]
        [(? raise-result?)
-        `((#:expectvs ,tr)
-          (#:subfail "the expression raised an exception"))])]
+        `((expectvs ,tr)
+          (prefail "the expression raised an exception"))])]
     [(checker:custom vcheck vsmask vscheck rcheck info)
      (define fault
        (match r
@@ -115,10 +112,10 @@
          [(? list? vs)
           (define vslen (length vs))
           (cond [(bitwise-bit-set? vsmask vslen) (vscheck vs)]
-                [else `((#:subfail ,(maybe-wrong-arity/mask vslen vsmask)))])]
+                [else `((prefail ,(maybe-wrong-arity/mask vslen vsmask)))])]
          [(raise-result v)
           (cond [rcheck (rcheck v)]
-                [else `((#:subfail "the expression raised an exception"))])]))
+                [else `((prefail "the expression raised an exception"))])]))
      (and fault (append fault info))]))
 
 ;; maybe-wrong-arity : Nat Nat -> String/#f
@@ -161,20 +158,40 @@
 ;; Info and Faults
 
 ;; InfoList = (Listof (List Key Any))
-;; where Key = Keyword | Symbol | String; keywords reserved for this library.
+;; where Key = Symbol | String
 
-;; Fault = #f or InfoList, with the following fault keys:
-;; - '#:location  -- added by check/test
-;; - '#:actual    -- value, added by check
-;; - '#:expected  -- string, from checker
-;; - '#:expectvs  -- Result, from checker -- prints as "expected"
-;; - '#:othervs   -- Result, from checker -- prints as "other"
-;; - 'predicate, 'regexp, etc   -- (non-kw keys) value, from checker
-;; - '#:failure   -- string, from checker (omit if obvious)
-;; - '#:subfail   -- string, from checker
-;; Fault may be constructed with keys in any order, will be sorted by displayer
-;; into order above. Order of non-kw keys matters, though.
+;; Fault = #f or InfoList, with the keys listed below. May be constructed
+;; with keys in any order, will be displayed into order below.
 
+(define fault-info-keys
+  `(;; Set by check:
+    (location   "location"      display ,source-location->string)
+    (actual     "actual"        value   ,result->print-result)
+    ;; ----------------------------------------
+    ;; Set by checker, w/o actual result:
+    (expected   "expected"      display #f)
+    (expectvs   "expected"      value   ,result->print-result) ;; omit 'expected
+    (expnotvs   "expect not"    value   ,result->print-result) ;; omit 'expected
+    (predicate  "predicate"     value   #f)
+    (regexp     "regexp"        value   #f)
+    (comparison "comparison"    value   #f)
+    (compare-v  "compare to"    value   #f)
+    (pattern    "pattern"       write   #f)
+    (vsmask     "arity"         display  ,arity-mask->text)
+    ;; ----------------------------------------
+    ;; Depends on actual result
+    (failure    "failure"       display #f)  ;; why failed
+    (prefail    "failure"       display #f)  ;; why inapplicable
+    ))
+
+(define (print-fault fault printkv)
+  (for ([e (in-list fault-info-keys)])
+    (match-define (list key label mode convert) e)
+    (match (assoc key fault)
+      [(list _ v)
+       (when (case mode [(display) v] [else #t])
+         (printkv label mode (if convert (convert v) v)))]
+      [#f (void)])))
 
 ;; ============================================================
 ;; Check
@@ -186,7 +203,7 @@
 (struct check-failure test-signal ())
 
 (define (make-check-failure info result fault)
-  (check-failure (append info `((#:actual ,result)) fault)))
+  (check-failure (append info `((actual ,result)) fault)))
 
 ;; Note: evaluation is left-to-right (except info)
 (define-syntax-rule (check* info expr checker ...)

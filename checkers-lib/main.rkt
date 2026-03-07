@@ -74,7 +74,7 @@
     (pattern (~seq #:match pattern:expr)
              #:with checker #'(checker:predicate
                                (lambda (v) (match v [pattern #t] [_ #f]))
-                               #:info `((#:expected "result value matching pattern")
+                               #:info `((expected "result value matching pattern")
                                         (pattern (quote pattern)))))
     ;; raise/error checkers
     (pattern (~seq #:error predicate/regexp:expr)

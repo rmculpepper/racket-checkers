@@ -150,23 +150,10 @@
   (void))
 
 (define (print-fail ctx info out)
-  (define (print-info key label mode #:if [ok? void] #:map [f values])
-    (match (assoc key info)
-      [(list _ v) (when (ok? v) (printkv label mode (f v) out))]
-      [#f (void)]))
   (write-string bar-line out)
   (write-string (test-context-full-name-line ctx) out)
   (write-string "FAIL\n" out)
-  (print-info '#:location "location" 'display
-              #:if source-location? #:map source-location->string)
-  (print-info '#:actual "actual" 'value #:map result->print-result)
-  (print-info '#:expected "expected" 'display #:if string?)
-  (print-info '#:expectvs "expected" 'value #:map result->print-result)
-  (print-info '#:othervs "other" 'value #:map result->print-result)
-  (for ([e (in-list info)] #:when (or (symbol? (car e)) (string? (car e))))
-    (printkv (format "~a" (car e)) 'value (cadr e) out))
-  (print-info '#:failure "failure" 'display #:if string?)
-  (print-info '#:subfail "detail" 'display #:if string?)
+  (print-fault info (lambda (k mode v) (printkv k mode v out)))
   (write-string bar-line out)
   (void))
 
@@ -177,6 +164,8 @@
   (case mode
     ((display)
      (fprintf out "~a~a~a\n" key pad v))
+    ((write)
+     (fprintf out "~a~a~s\n" key pad v))
     ((value)
      (fprintf out "~a~a~e\n" key pad v))))
 
