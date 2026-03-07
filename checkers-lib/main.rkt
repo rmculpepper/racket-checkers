@@ -78,15 +78,26 @@
                                         (pattern expected-pattern))))
     ;; raise/error checkers
     (pattern (~seq #:error predicate/regexp:expr)
-             #:with checker #'(checker:error predicate/regexp))
-    ))
+             #:with checker #'(checker:error predicate/regexp)))
+
+  (define-splicing-syntax-class maybe-forward
+    #:attributes ([checker 1] fwd?)
+    (pattern (~seq)
+             #:with (checker ...) '()
+             #:with fwd? #'#f)
+    (pattern (~seq #:values)
+             #:with (checker ...) (list #'(checker:no-error))
+             #:with fwd? #'#t)
+    (pattern (~seq #:forward-result)
+             #:with (checker ...) '()
+             #:with fwd? #'#t)))
 
 ;; Note: evaluation is left-to-right
 (define-syntax check
   (syntax-parser
-    [(_ actual:expr c:checker-clause ...)
+    [(_ actual:expr c:checker-clause ... fwd:maybe-forward)
      #`(let ([info `((location ,#,(stx->loc-expr this-syntax)))])
-         (check* info actual c.checker ...))]))
+         (check* fwd.fwd? info actual c.checker ... fwd.checker ...))]))
 
 (define-syntax checker:equal*
   (syntax-parser

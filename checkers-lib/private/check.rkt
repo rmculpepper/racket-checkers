@@ -194,8 +194,7 @@
 ;; ============================================================
 ;; Check
 
-;; A check either returns void or raises a `check-failure` instance (not an exn
-;; subtype). Unlike rackunit, top-level checks do not get wrapped as test cases.
+;; Unlike rackunit, top-level checks do not get wrapped as test cases.
 
 (struct test-signal (info))
 (struct check-failure test-signal ())
@@ -203,12 +202,12 @@
 (define (make-check-failure info result fault)
   (check-failure (append info `((actual ,result)) fault)))
 
-;; Note: evaluation is left-to-right (except info)
-(define-syntax-rule (check* info expr checker ...)
+;; Note: evaluation of expr, checkers is left-to-right
+(define-syntax-rule (check* fwd? info expr checker ...)
   (let ([r (catch-result expr)])
     (let ([fault (apply-checkers (list checker ...) r)])
-      (when fault (raise (make-check-failure info r fault)))
-      (void))))
+      (when fault (raise (make-check-failure info r fault))))
+    (if fwd? (reflect-result r) (void))))
 
 ;; ----------------------------------------
 

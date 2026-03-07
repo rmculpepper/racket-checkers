@@ -24,6 +24,11 @@
 (define (multi-values-result? r)
   (and (list? r) (not (single-result? r))))
 
+(define (reflect-result r)
+  (match r
+    [(? list? vs) (apply values vs)]
+    [(raise-result e) (raise e)]))
+
 ;; ----------------------------------------
 
 ;; A PrintResult is one of
