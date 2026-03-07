@@ -14,11 +14,11 @@
 
 ;; A Checker is one of
 ;; - (checker:equal ValuesResult)
-;; - (checker:custom (X -> Fault)/#f ArityMask (Xs -> Fault)/#f (Any -> Fault)/#f)
-;;   INV: if vcheck, vsmask has bit 1 set; if vsmask != 0, vcheck or vscheck present
+;; - (checker:custom ArityMask (Xs -> Fault)/#f (Any -> Fault)/#f)
+;;   INV: if vsmask != 0, vscheck present
 (struct checker ())
 (struct checker:equal checker (toresult))
-(struct checker:custom checker (vcheck vsmask vscheck rcheck info)
+(struct checker:custom checker (vsmask vscheck rcheck info)
   #:reflection-name 'checker)
 
 (define NONE-MASK 0)
@@ -31,7 +31,7 @@
     `((expnotvs ,othervs)
       #;(vsmask ,vsmask)))
   (define (vscheck vs) (if (equal? vs othervs) '() #f))
-  (checker:custom #f vsmask vscheck #f info))
+  (checker:custom vsmask vscheck #f info))
 
 (define (checker:predicate pred [arity-mask ANY-MASK] #:info [info0 #f])
   (define vsmask (bitwise-and arity-mask (procedure-arity-mask pred)))
@@ -45,15 +45,15 @@
                  (predicate ,pred)
                  (vsmask ,vsmask))])))
   (define (vscheck vs) (if (apply pred vs) #f '()))
-  (checker:custom #f vsmask vscheck #f info))
+  (checker:custom vsmask vscheck #f info))
 
 (define (checker:compare compare toval)
   (define info
     `((expected "value satisfying comparison")
       (comparison ,compare)
       (compare-v ,toval)))
-  (define (vcheck v) (if (compare v toval) #f '()))
-  (checker:custom vcheck ONE-MASK #f #f info))
+  (define (vscheck vs) (if (compare (car vs) toval) #f '()))
+  (checker:custom ONE-MASK vscheck #f info))
 
 (define (checker:error pred/rx)
   (match pred/rx
@@ -62,7 +62,7 @@
        `((expected "raised value satisfying predicate")
          (predicate ,pred)))
      (define (rcheck v) (if (pred v) #f '()))
-     (checker:custom #f NONE-MASK #f rcheck info)]
+     (checker:custom NONE-MASK #f rcheck info)]
     [(? regexp? rx)
      (define info
        `((expected "raised exception with message matching regexp")
@@ -73,17 +73,17 @@
              [(not (regexp-match? rx (exn-message v)))
               `((failure "exception message does not match regexp"))]
              [else #f]))
-     (checker:custom #f NONE-MASK #f rcheck info)]))
+     (checker:custom NONE-MASK #f rcheck info)]))
 
 (define (checker:is-true)
   (let ([info `((expected "any true result value"))]
-        [vcheck (lambda (v) (if v #f '()))])
-    (checker:custom vcheck ONE-MASK #f #f info)))
+        [vscheck (lambda (vs) (if (car vs) #f '()))])
+    (checker:custom ONE-MASK vscheck #f info)))
 
 (define (checker:no-error)
   (let ([info `((expected "does not raise an exception"))]
         [vscheck (lambda (vs) #f)])
-    (checker:custom #f ANY-MASK vscheck #f info)))
+    (checker:custom ANY-MASK vscheck #f info)))
 
 ;; ----------------------------------------
 
@@ -94,21 +94,18 @@
 ;; apply-checker : Checker Result -> Fault
 (define (apply-checker c r)
   (match c
-    [(checker:equal tr)
+    [(checker:equal evs)
      (match r
-       [(? list?)
-        (cond [(equal? r tr) #f]
-              [else `((expectvs ,tr)
-                      (prefail ,(maybe-wrong-arity (length r) (length tr))))])]
+       [(? list? vs)
+        (cond [(equal? vs evs) #f]
+              [else `((expectvs ,evs)
+                      (prefail ,(maybe-wrong-arity (length vs) (length evs))))])]
        [(? raise-result?)
-        `((expectvs ,tr)
+        `((expectvs ,evs)
           (prefail "the expression raised an exception"))])]
-    [(checker:custom vcheck vsmask vscheck rcheck info)
+    [(checker:custom vsmask vscheck rcheck info)
      (define fault
        (match r
-         [(list v)
-          #:when vcheck ;; implies (bitwise-bit-set? vsmask 1)
-          (vcheck v)]
          [(? list? vs)
           (define vslen (length vs))
           (cond [(bitwise-bit-set? vsmask vslen) (vscheck vs)]
