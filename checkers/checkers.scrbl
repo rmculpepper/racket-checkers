@@ -99,7 +99,7 @@ a prefix. Checks only affect the immediately enclosing test; the failure of an
 inner nested test does not cause the outer test to fail.
 }
 
-@defform[(check actual-expr check-clause ...)
+@defform[(check actual-expr check-clause ... maybe-forward)
          #:grammar
          ([check-clause
            (code:line #:is expected-expr)
@@ -108,7 +108,11 @@ inner nested test does not cause the outer test to fail.
            (code:line #:match expected-pattern)
            (code:line #:error predicate/regexp-expr)
            (code:line #:no-error)
-           (code:line #:with predicate/checker-expr)])
+           (code:line #:with predicate/checker-expr)]
+          [maybe-forward
+           (code:line)
+           (code:line #:forward)
+           (code:line #:values)])
          #:contracts
          ([predicate/regexp-expr (or/c (-> any/c any/c) regexp?)]
           [predicate/checker-expr (or/c (-> any/c any/c) checker?)])]{
@@ -190,6 +194,27 @@ a single value and the predicate accepts that value. (See
 If a checker is given, the checker is applied to the result. The kind of result
 accepted (single value, multiple values, or raised exception) depends on the
 checker.
+}
+
+If all check clauses succeed, the result of the @racket[check] expression is
+determined by @racket[maybe-forward]. If @racket[maybe-forward] is absent, then
+@racket[(void)] is returned. Otherwise, @racket[maybe-forward] must be one of
+the following:
+
+@specsubform[(code:line #:forward)]{
+
+The @racket[check] expression produces the same result as
+@racket[actual-expr]. That is, if @racket[actual-expr] produced values, the
+@racket[check] expression returns those values; if @racket[actual-expr] raised
+an exception, the @racket[check] expression re-raises that exception.
+}
+
+@specsubform[(code:line #:values)]{
+
+If @racket[actual-expr] produced values, the values are returned; otherwise, a
+check failure is signaled.
+
+Equivalent to @racket[#:no-error #:forward].
 }
 
 }
