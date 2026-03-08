@@ -32,14 +32,16 @@ expression's body is immediately executed, and the test expression returns
   (check (* 8 1) #:is 8))
 ]
 
-If a check fails, information about the failure is printed and the execution of
-the enclosing test stops.
+If a check fails, information about the failure and the enclosing test is
+printed and the execution of the enclosing test stops.
 
 @examples[#:eval the-eval #:label #f
-(test
+(test #:name "addition"
   (check (+ 1 1) #:is 2)
-  (check (+ 2 2) #:is 5) (code:comment "whoops")
-  (printf "this is not printed\n"))
+  (test #:name "more addition"
+    (check (+ 2 2) #:is 5) (code:comment "whoops")
+    (printf "this is not printed\n"))
+  (printf "but this line is\n"))
 ]
 
 The @racket[check] form catches exceptions and multiple values in the ``actual''
@@ -67,6 +69,18 @@ useful for error and predicate tests.
          #:with (lambda (v) (= (length v) 10))))
 ]
 
+Checks return @racket[(void)] by default, but they can optionally forward the
+result of the actual expression, allowing the checked computation to be used in
+other computations and other checks.
+
+@examples[#:eval the-eval #:label #f
+(test
+  (define-values (n r)
+    (check (quotient/remainder 10 3) #:values))
+  (check (+ (* n 3) r) #:is 10))
+]
+
+
 @; ------------------------------------------------------------
 @section[#:tag "api"]{Checkers API}
 
@@ -76,7 +90,7 @@ useful for error and predicate tests.
                       (code:line #:name name-expr)]
           [maybe-loc (code:line)
                      (code:line #:location loc-expr)
-                     (code:line #:location-syntax term)])
+                     (code:line #:location-syntax loc-term)])
          #:contracts
          ([name-expr (or/c string? #f)]
           [loc-expr source-location?])]{
@@ -88,15 +102,14 @@ given, it is used as the test's location; otherwise the location is taken from
 @racket[test] expression is always @racket[(void)].
 
 If a @racket[check] expression is executed during the evaluation of the test
-body, then evaluation of the test stops and the test is marked as
+body and fails, then evaluation of the test stops and the test is marked as
 @emph{failed}. Otherwise, if evaluation of the test body completes, the test is
-marked as @emph{passed}. Checks are implemented by calling @racket[raise] with
-special non-exception values. The @racket[test] form only catches these values;
-it does not catch exceptions.
+marked as @emph{passed}. Check failures are implemented by calling
+@racket[raise] with special non-exception values. The @racket[test] form only
+catches these values; it does not catch exceptions.
 
-Tests may execute nested tests. The inner test inherits the outer test's name as
-a prefix. Checks only affect the immediately enclosing test; the failure of an
-inner nested test does not cause the outer test to fail.
+Tests may execute nested tests. Checks only affect the immediately enclosing
+test; the failure of an inner nested test does not cause the outer test to fail.
 }
 
 @defform[(check actual-expr check-clause ... maybe-forward)
