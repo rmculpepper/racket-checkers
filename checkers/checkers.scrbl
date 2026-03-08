@@ -2,7 +2,6 @@
 @(require scribble/example
           (for-label racket/base
                      racket/contract
-                     racket/match
                      raco/testing
                      syntax/srcloc
                      checkers))
@@ -118,7 +117,6 @@ test; the failure of an inner nested test does not cause the outer test to fail.
            (code:line #:is expected-expr)
            (code:line #:is-not unexpected-expr)
            (code:line #:is-true)
-           (code:line #:match expected-pattern)
            (code:line #:error predicate/regexp-expr)
            (code:line #:no-error)
            (code:line #:with predicate/checker-expr)]
@@ -171,15 +169,6 @@ Succeeds if the actual result is a single value that is not @racket[#f].
 
 Equivalent to @racket[#:with (λ (v) v)], except for the information accompanying
 a check failure.
-}
-
-@specsubform[(code:line #:match expected-pattern)]{
-
-Succeeds if the actual result is a single value matching the @racket[match]
-pattern.
-
-Equivalent to @racket[#:with (λ (v) (match v [expected-pattern #t] [_ #f]))],
-except for the information accompanying a check failure.
 }
 
 @specsubform[(code:line #:error predicate/regexp-expr)]{

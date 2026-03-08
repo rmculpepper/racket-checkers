@@ -4,7 +4,6 @@
 #lang racket/base
 (require (for-syntax racket/base syntax/parse)
          racket/list
-         racket/match
          racket/contract/base
          syntax/srcloc
          "private/result.rkt"
@@ -71,11 +70,6 @@
     ;; single-value checkers
     (pattern (~seq #:is-true)
              #:with checker #'(checker:is-true))
-    (pattern (~seq #:match expected-pattern:expr)
-             #:with checker #'(checker:predicate
-                               (lambda (v) (match v [expected-pattern #t] [_ #f]))
-                               #:info `((expected "result value matching pattern")
-                                        (pattern expected-pattern))))
     ;; raise/error checkers
     (pattern (~seq #:error predicate/regexp:expr)
              #:with checker #'(checker:error predicate/regexp)))

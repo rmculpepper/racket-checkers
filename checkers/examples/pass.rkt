@@ -24,9 +24,6 @@
   (check (range 10)
     #:with list?
     #:with (lambda (v) (= (length v) 10))))
-(test
-  (check (range 10)
-    #:match (list (? exact-nonnegative-integer?) ...)))
 
 (test (check 1 #:is-true))
 (test (check 1 #:is-not 2))

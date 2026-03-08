@@ -30,10 +30,6 @@
 (test (check (values 1 2) #:is-true))
 (test (check (/ 1 0) #:is-true))
 
-(test (check 1 #:match (list x y)))
-(test (check (values 1 2) #:match (list x y)))
-(test (check (/ 1 0) #:match (list x y)))
-
 (test (check 1 #:error exn:fail?))
 (test (check 1 #:error #rx"wrong"))
 (test (check (values 1 2) #:error exn:fail?))
