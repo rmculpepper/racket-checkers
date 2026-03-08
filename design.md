@@ -17,11 +17,6 @@
 # Feature plans and anti-plans
 
 - change from "actual/expected" to "got/wanted"?
-- add option to `check` to return values / re-raise exn
-  - `#:forward-result` - returns values or re-raises exn
-  - `#:values` = `#:no-error #:forward-result`
-- add option to `test` to catch exceptions (`#:catch`?)
-  - add "test-error" status, or treat as if check failure?
 
 ## Test
 
@@ -38,6 +33,9 @@
   - support external analysis of tests
   - maybe support name with "${key}" interpolation,
     then uninterpolated name acts as stable identifier
+- add option to catch exceptions (`#:catch`?)
+  - add "test-error" status, or treat as if check failure?
+  - maybe unnecessary with check `#:forward` mode
 
 ## Check
 
