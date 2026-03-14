@@ -6,7 +6,7 @@
 ;; pkg info
 
 (define collection "checkers")
-(define deps '("base" "checkers-lib"))
+(define deps '("base" "compiler-lib" "checkers-lib"))
 (define build-deps
   '("scribble-lib"
     "racket-doc"))
