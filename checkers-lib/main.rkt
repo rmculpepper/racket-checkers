@@ -8,7 +8,8 @@
          syntax/srcloc
          "private/result.rkt"
          "private/test.rkt"
-         "private/check.rkt")
+         "private/check.rkt"
+         "private/terminal.rkt")
 (provide test
          check
          checker?
@@ -24,6 +25,7 @@
           [run-tests
            (->* [(-> any)]
                 [#:out (or/c output-port? (-> output-port?))
+                 #:progress? boolean?
                  #:tell-raco? boolean?]
                 exact-nonnegative-integer?)]))
 
@@ -108,13 +110,14 @@
 
 (define (run-tests proc
                    #:out [out (current-error-port)]
-                   #:trace [level 0]
+                   #:progress? [progress? #f]
                    #:tell-raco? [tell-raco? #t]
                    #:count-states [count-states '(fail incomplete)])
+  (define progress (and progress? (make-terminal-progress)))
   (define listener
     (make-test-listener #:out out
-                        #:tell-raco? tell-raco?
-                        #:trace (case level [(#t) +inf.0] [else level])))
+                        #:progress progress
+                        #:tell-raco? tell-raco?))
   (parameterize ((current-test-context null)
                  (current-test-listeners (list listener)))
     (call-with-continuation-barrier proc))
@@ -123,8 +126,34 @@
         [pass (hash-ref ch 'pass 0)]
         [fail (hash-ref ch 'fail 0)]
         [incomplete (hash-ref ch 'incomplete 0)])
+    (when progress (progress #f pass fail))
     (print-summary start pass fail incomplete)
     (for/sum ([st (in-list count-states)]) (hash-ref ch st 0))))
+
+(define (make-terminal-progress)
+  (define terminal-status (make-terminal-status))
+  (and terminal-status (make-terminal-progress* terminal-status)))
+
+(define (make-terminal-progress* terminal-status)
+  (define progress
+    (case-lambda
+      [()
+       (terminal-status 'retract)
+       (void)]
+      [(ctx pass fail)
+       (define parts
+         (if ctx
+             (for/list ([frame (in-list (reverse ctx))])
+               (define name (or (test-frame-short-name frame) "?"))
+               (string->linebuf name (if (test-frame-fail? frame) 'red 'green)))
+             (list (string->linebuf "finished"))))
+       (define left (linebuf-join (filter linebuf? parts) #:sep (string->linebuf " > ")))
+       (define right (linebuf-append (string->linebuf (format "~s" pass) 'green)
+                                     (string->linebuf "+")
+                                     (string->linebuf (format "~s" fail) 'red)
+                                     (string->linebuf " ")))
+       (terminal-status 'update left right)]))
+  (and terminal-status progress))
 
 (define (print-summary start pass fail incomplete)
   (define (ifnz n label) (if (zero? n) "" (format ", ~s ~a" n label)))

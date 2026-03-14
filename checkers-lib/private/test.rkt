@@ -19,7 +19,7 @@
 
 ;; test* : String/#f Srcloc/#f (Listof TestOption) (-> Any) -> Void
 (define (test* name loc proc)
-  (define frame (test-frame name loc))
+  (define frame (test-frame name loc #f))
   (define ctx (cons frame (current-test-context)))
   (parameterize ((current-test-context ctx))
     (with-handlers ([test-signal?
@@ -39,8 +39,8 @@
 ;; Test Contexts
 
 ;; TestContext = (Listof TestFrame)
-;; TestFrame = (test-frame String/#f Srcloc/#f)
-(struct test-frame (name loc) #:transparent)
+;; TestFrame = (test-frame String/#f Srcloc/#f Bool)
+(struct test-frame (name loc [fail? #:mutable]) #:transparent)
 
 ;; current-test-context : Parameter of TestContext
 (define current-test-context (make-parameter null))
@@ -56,6 +56,12 @@
 
 (define (test-context-short-name ctx)
   (and (pair? ctx) (test-frame-short-name (car ctx))))
+
+(define (test-context-fail! ctx)
+  (when (pair? ctx)
+    (unless (test-frame-fail? (car ctx))
+      (set-test-frame-fail?! (car ctx) #t)
+      (test-context-fail! (cdr ctx)))))
 
 (define (test-frame-short-name fr)
   (or (test-frame-name fr)
@@ -83,32 +89,36 @@
 ;; make-test-listener : ... -> TestListener
 (define (make-test-listener #:out [out (current-error-port)] ;; OutPort or (-> OutPort)
                             #:tell-raco? [tell-raco? #t]
-                            #:trace [print-levels 0]
+                            #:progress [progress #f]
                             #:print-states [print-states '(fail)])
   (define (get-out) (if (procedure? out) (out) out))
   (define cv (make-counter-vector))
   (define (tell s)
     (counter-incr! cv s 1)
     (when tell-raco? (tell-raco s)))
+  (define (tell-progress ctx)
+    (progress ctx (vector-ref cv pass-index) (vector-ref cv fail-index)))
   (define (listener ctx event)
     (match event
       ;; --------------------
       ;; Test events
       ['start
        (tell 'start)
-       (define level (max 0 (sub1 (length ctx)))) ;; though ctx should be non-empty
-       (when (< level print-levels)
-         (printf "~a~a\n"
-                 (make-string (* level 2) #\space)
-                 (or (test-context-short-name ctx) "?")))]
+       (when progress
+         (tell-progress ctx))]
       ['end
        (tell 'pass)
        (when (memq 'pass print-states)
-         (print-pass ctx (get-out)))]
+         (when progress (progress))
+         (print-pass ctx (get-out)))
+       (when progress (tell-progress (cdr ctx)))]
       [(check-failure info)
+       (test-context-fail! ctx)
        (tell 'fail)
        (when (memq 'fail print-states)
-         (print-fail ctx info (get-out)))]
+         (when progress (progress))
+         (print-fail ctx info (get-out)))
+       (when progress (tell-progress (cdr ctx)))]
       ;; --------------------
       ;; Query methods (ctx unused)
       ['get-counters
@@ -135,6 +145,8 @@
   (let loop ()
     (define n (vector-ref cv si))
     (if (vector-cas! cv si n (+ n delta)) (void) (loop))))
+(define pass-index (slot-index 'pass))
+(define fail-index (slot-index 'fail))
 
 (define (tell-raco s)
   (case s
