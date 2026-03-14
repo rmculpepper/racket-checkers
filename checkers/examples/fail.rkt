@@ -52,9 +52,11 @@
 (test (check (values 1 2) #:with (checker:compare > 10)))
 (test (check (/ 1 0) #:with (checker:compare > 10)))
 
-
 (match (test-report)
   [(cons failed total)
    (unless (= failed total)
      (error 'examples "not all tests failed!\n  total: ~s\n  failed: ~s"
             total failed))])
+
+(module test racket/base
+  (void))

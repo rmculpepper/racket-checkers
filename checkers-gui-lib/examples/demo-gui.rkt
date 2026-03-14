@@ -12,3 +12,6 @@
     (let/ec escape (test "escapes" (escape (void))))))
 
 (test/gui go)
+
+(module test racket/base
+  (void))
