@@ -27,7 +27,7 @@
                 [#:out (or/c output-port? (-> output-port?))
                  #:progress? boolean?
                  #:tell-raco? boolean?]
-                exact-nonnegative-integer?)]))
+                void?)]))
 
 ;; This is my bikeshed. There are many like it, but this one is mine.
 
@@ -128,7 +128,8 @@
         [incomplete (hash-ref ch 'incomplete 0)])
     (when progress (progress #f pass fail))
     (print-summary start pass fail incomplete)
-    (for/sum ([st (in-list count-states)]) (hash-ref ch st 0))))
+    #;(for/sum ([st (in-list count-states)]) (hash-ref ch st 0))
+    (void)))
 
 (define (make-terminal-progress)
   (define terminal-status (make-terminal-status))
