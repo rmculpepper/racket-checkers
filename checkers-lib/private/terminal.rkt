@@ -3,17 +3,35 @@
 
 #lang racket/base
 (require racket/match
-         racket/list
-         (only-in '#%terminal
-                  terminal-init
-                  terminal-get-screen-size
-                  terminal-carriage-return
-                  terminal-clear
-                  terminal-move-cursor
-                  terminal-write-char
-                  terminal-flush
-                  terminal-set-color))
+         racket/list)
 (provide (all-defined-out))
+
+(define (get-terminal-op sym)
+  (dynamic-require ''#%terminal sym (lambda () #f)))
+(define terminal-init (get-terminal-op 'terminal-init))
+(define terminal-get-screen-size (get-terminal-op 'terminal-get-screen-size))
+(define terminal-carriage-return (get-terminal-op 'terminal-carriage-return))
+(define terminal-clear (get-terminal-op 'terminal-clear))
+(define terminal-move-cursor (get-terminal-op 'terminal-move-cursor))
+(define terminal-write-char (get-terminal-op 'terminal-write-char))
+(define terminal-flush (get-terminal-op 'terminal-flush))
+(define terminal-set-color (get-terminal-op 'terminal-set-color))
+
+(define terminal-ok?
+  (and terminal-init
+       terminal-get-screen-size
+       terminal-carriage-return
+       terminal-clear
+       terminal-move-cursor
+       terminal-write-char
+       terminal-flush
+       terminal-set-color))
+
+;; Known bugs and limitations:
+;; - Assumes all characters have width = 1.
+;; - Assumes terminal has "magic margins". That is, we can write to all columns
+;;   in a line, and the cursor remains on the line until the (columns+1)th
+;;   character is written.
 
 (define DEFAULT-BG 'dark-gray)
 
@@ -21,7 +39,8 @@
   (define in (current-input-port))
   (define out (current-output-port))
   (define err (current-error-port))
-  (cond [(and (terminal-port? in)
+  (cond [(and terminal-ok?
+              (terminal-port? in)
               (terminal-port? out)
               (terminal-init -1 -1))
          (let ([bg (symbol->color-code (or bgcolor DEFAULT-BG))])
@@ -184,6 +203,8 @@
   (apply linebuf-append (cons prefix-lb (add-between lbs sep-lb))))
 
 ;; compose-line : LineBuf LineBuf Nat -> (values LineBuf (U 'complete 'incomplete #f))
+;; Combine left (left-aligned) and right (right-aligned) into a line with given
+;; number of columns. Can abbreviate left, but not right.
 (define (compose-line left right columns)
   (match-define (linebuf left-s left-efg) left)
   (match-define (linebuf right-s right-efg) right)
@@ -202,6 +223,8 @@
         [else (values empty-linebuf #f)]))
 
 ;; line-get-update-range : LineBuf LineBuf -> (values Nat Nat Boolean)
+;; Returns range containing positions in newlb that differ from oldlb,
+;; plus clear? flag if oldlb was longer.
 (define (line-get-update-range oldlb newlb)
   (match-define (linebuf old-s old-efg) oldlb)
   (match-define (linebuf new-s new-efg) newlb)
