@@ -271,15 +271,25 @@ procedure, the check succeeds if @racket[(pred/rx _v)] returns a true value; if
 @; ----------------------------------------
 @subsection[#:tag "api-run"]{Running Tests}
 
+Tests are run automatically, and the default runner prints check failures to the
+current error port and logs test results using @racket[test-log!]. The
+@racket[run-tests] provides additional options.
+
 @defproc[(run-tests [proc (-> any)]
                     [#:out out (or/c output-port? (-> output-port?))
                            (current-error-port)]
+                    [#:progress? progress? boolean? #f]
                     [#:tell-raco? tell-raco? boolean? #t])
-         exact-nonnegative-integer?]{
+         void?]{
 
 Calls @racket[(proc)] and reports any test failures by printing to
 @racket[out]. When the procedure completes, a summary is printed to
-@racket[out], and the number of test failures is returned.
+@racket[out].
+
+If @racket[progress?] is true and Racket is running in an interactive terminal,
+then the procedure maintains a status line with the full name of the current
+test and a count of passing and failing tests so far. If the terminal is not
+available, @racket[progress?] has no effect.
 
 If @racket[tell-raco?] is true, then each @racket[test] expression reports its
 success or failure to @racketmodname[raco/testing] using @racket[test-log!].
