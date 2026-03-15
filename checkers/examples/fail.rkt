@@ -43,10 +43,12 @@
 (test (check (values 1 2) #:with even?))
 (test (check (/ 1 0) #:with even?))
 
-(test (check 1 #:with (checker:predicate void #b100)))
-(test (check (values 1 2) #:with (checker:predicate void #b111000)))
-(test (check (values 1 2) #:with (checker:predicate void (arithmetic-shift -1 3))))
+(test (check 1 #:with (checker:predicate void #:arity-mask #b100)))
+(test (check (values 1 2) #:with (checker:predicate void #:arity-mask #b111000)))
+(test (check (values 1 2) #:with (checker:predicate void #:arity-mask (arithmetic-shift -1 3))))
 (test (check (/ 1 0) #:with (checker:predicate void)))
+
+(test (check 1 #:with (checker:predicate even? #:property "even number")))
 
 (test (check 1 #:with (checker:compare > 10)))
 (test (check (values 1 2) #:with (checker:compare > 10)))

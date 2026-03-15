@@ -17,7 +17,10 @@
          (rename-out [checker:not-equal* checker:not-equal])
          (contract-out
           [checker:predicate
-           (->* [procedure?] [exact-integer?] checker?)]
+           (->* [procedure?]
+                [#:arity-mask exact-integer?
+                 #:property (or/c string? #f)]
+                checker?)]
           [checker:compare
            (-> (-> any/c any/c any/c) any/c checker?)]
           [checker:error

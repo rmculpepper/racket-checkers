@@ -33,17 +33,20 @@
   (define (vscheck vs) (if (equal? vs othervs) '() #f))
   (checker:custom vsmask vscheck #f info))
 
-(define (checker:predicate pred [arity-mask ANY-MASK] #:info [info0 #f])
+(define (checker:predicate pred
+                           #:arity-mask [arity-mask ANY-MASK]
+                           #:property [property #f])
   (define vsmask (bitwise-and arity-mask (procedure-arity-mask pred)))
   (define info
-    (or info0
-        (cond [(= vsmask ONE-MASK)
-               `((expected "value satisfying predicate")
-                 (predicate ,pred))]
-              [else
-               `((expected "value(s) satifying predicate")
-                 (predicate ,pred)
-                 (vsmask ,vsmask))])))
+    (cond [(= vsmask ONE-MASK)
+           `((expected "value satisfying predicate")
+             (predicate ,pred)
+             (property ,property))]
+          [else
+           `((expected "value(s) satifying predicate")
+             (predicate ,pred)
+             (vsmask ,vsmask)
+             (property ,property))]))
   (define (vscheck vs) (if (apply pred vs) #f '()))
   (checker:custom vsmask vscheck #f info))
 
@@ -146,7 +149,7 @@
   (cond [(checker? v) v]
         [((current-checker-converter) v) => values]
         [(and (procedure? v) (procedure-arity-includes? v 1))
-         (checker:predicate v ONE-MASK)]
+         (checker:predicate v #:arity-mask ONE-MASK)]
         [else (error 'check "could not convert to checker: ~e" v)]))
 
 (define current-checker-converter
@@ -176,6 +179,7 @@
     (compare-v  "compare to"    value   #f)
     (pattern    "pattern"       write   #f)
     (vsmask     "arity"         display  ,arity-mask->text)
+    (property   "property"      display #f)
     ;; ----------------------------------------
     ;; Depends on actual result
     (failure    "failure"       display #f)  ;; why failed
