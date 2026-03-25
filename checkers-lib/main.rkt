@@ -53,8 +53,9 @@
 (define-syntax test
   (syntax-parser
     [(_ (~optional n:maybe-name) (~optional l:maybe-location) body:expr ...)
-     #`(test* (~? n.name #f) (~? l.location #,(stx->loc-expr this-syntax))
-              (lambda () body ... (void)))]))
+     (with-syntax ([loc-expr (stx->loc-expr this-syntax)]
+                   [proc-expr (syntax/loc this-syntax (lambda () body ... (void)))])
+       #'(test* (~? n.name #f) (~? l.location loc-expr) proc-expr))]))
 
 ;; ============================================================
 ;; Check
