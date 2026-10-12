@@ -6,6 +6,7 @@
 ;; pkg info
 
 (define collection "checkers")
+(define blurb "A simple testing framework (documentation only)")
 (define deps '("base" "compiler-lib" "checkers-lib"))
 (define build-deps
   '("scribble-lib"

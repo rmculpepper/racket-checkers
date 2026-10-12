@@ -7,6 +7,7 @@
 
 (define version "0.1")
 (define collection "checkers")
+(define blurb "A simple testing framework (implementation only)")
 (define deps '("base" "compiler-lib"))
 (define pkg-authors '(ryanc))
 (define license 'Apache-2.0)

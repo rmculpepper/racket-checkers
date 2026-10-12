@@ -7,6 +7,7 @@
 
 (define version "0.1")
 (define collection "checkers")
+(define blurb "GUI components for the checkers testing framework (implementation only)")
 (define deps '("base"
                "data-lib"
                "snip-lib"
